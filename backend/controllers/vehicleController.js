@@ -74,7 +74,7 @@ const createVehicle = async (req, res) => {
     };
 
     // Validate required fields
-    const requiredFields = ['vehicleName', 'company', 'model', 'purchasedDate', 'vehicleCost', 'insuranceExpiry', 'odometerReading', 'vehicleRegistrationNumber'];
+    const requiredFields = ['vehicleName', 'company', 'model', 'fuelType', 'purchasedDate', 'vehicleCost', 'insuranceExpiry', 'odometerReading', 'vehicleRegistrationNumber'];
     const missingFields = requiredFields.filter(field => !vehicleData[field]);
 
     if (missingFields.length > 0) {

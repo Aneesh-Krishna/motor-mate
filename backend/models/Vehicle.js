@@ -24,6 +24,12 @@ const VehicleSchema = new mongoose.Schema({
     trim: true,
     maxlength: 50
   },
+  fuelType: {
+    type: String,
+    required: true,
+    enum: ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'CNG', 'LPG'],
+    default: 'Petrol'
+  },
   purchasedDate: {
     type: Date,
     required: true

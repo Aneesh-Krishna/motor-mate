@@ -110,8 +110,8 @@ const googleSuccess = async (req, res) => {
     // Generate JWT token with 24-hour expiration
     const token = generateToken(user._id);
 
-    // Redirect to frontend with token and user data
-    const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+    // Redirect to frontend with token and user data (direct to root since we're not using react-router)
+    const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}?token=${token}&user=${encodeURIComponent(JSON.stringify({
       id: user._id,
       username: user.username,
       email: user.email,
@@ -121,7 +121,7 @@ const googleSuccess = async (req, res) => {
 
     res.redirect(redirectUrl);
   } catch (error) {
-    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/?error=authentication_failed`);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}?error=authentication_failed`);
   }
 };
 
