@@ -10,9 +10,37 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #f5f6fa;
+  background: linear-gradient(135deg, #f5f6fa 0%, #e9ecef 100%);
   color: #2c3e50;
   line-height: 1.6;
+  scroll-behavior: smooth;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selection styles */
+::selection {
+  background: linear-gradient(135deg, #667eea30, #764ba230);
+  color: #2c3e50;
+}
+
+/* Focus styles for accessibility */
+*:focus {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
+}
+
+/* Remove focus outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid #667eea;
+  outline-offset: 2px;
 }
 
 .App {
@@ -78,4 +106,98 @@ a:hover {
   background-color: #7f8c8d;
   text-decoration: none;
   color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(149, 165, 166, 0.3);
+}
+
+/* Enhanced button styles */
+.btn:active {
+  transform: translateY(0);
+}
+
+/* Loading animation */
+.btn.loading {
+  position: relative;
+  color: transparent;
+  pointer-events: none;
+}
+
+.btn.loading::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  top: 50%;
+  left: 50%;
+  margin-left: -10px;
+  margin-top: -10px;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  border-top-color: transparent;
+  animation: spin 1s ease-in-out infinite;
+}
+
+/* Toast notification styles */
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  background: white;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  transform: translateX(400px);
+  transition: transform 0.3s ease;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  max-width: 350px;
+  border-left: 4px solid #667eea;
+}
+
+.toast.show {
+  transform: translateX(0);
+}
+
+.toast.success {
+  border-left-color: #00b894;
+}
+
+.toast.error {
+  border-left-color: #e74c3c;
+}
+
+.toast.warning {
+  border-left-color: #f39c12;
+}
+
+.toast-icon {
+  font-size: 1.5rem;
+}
+
+.toast-content {
+  flex: 1;
+}
+
+.toast-title {
+  font-weight: 600;
+  color: #2c3e50;
+  margin-bottom: 0.25rem;
+}
+
+.toast-message {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
 }
