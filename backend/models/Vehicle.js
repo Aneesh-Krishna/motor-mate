@@ -90,9 +90,8 @@ VehicleSchema.pre('save', function(next) {
 
 // Create indexes for better performance
 VehicleSchema.index({ user: 1, isActive: 1 });
-VehicleSchema.index({ user: 1, nickname: 1 });
-VehicleSchema.index({ vin: 1 }, { sparse: true });
-VehicleSchema.index({ licensePlate: 1 }, { sparse: true });
+VehicleSchema.index({ user: 1, vehicleName: 1 });
+VehicleSchema.index({ vehicleRegistrationNumber: 1 }, { sparse: true });
 
 // Virtual for vehicle display name
 VehicleSchema.virtual('displayName').get(function() {
