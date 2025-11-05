@@ -67,7 +67,7 @@ const Register = () => {
   const onGoogleSignUp = async () => {
     const result = await dispatch(signUpWithGoogle());
     if (result.payload?.success) {
-      console.log('Welcome to Motorist App! Your account has been created with Google.');
+      console.log('Welcome to MotorMate! Your account has been created with Google.');
       navigate('/dashboard');
     }
   };
@@ -78,7 +78,7 @@ const Register = () => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h1 className="auth-title">🚗 Motorist App</h1>
+          <h1 className="auth-title">🚗 MotorMate</h1>
           <p className="auth-subtitle">Start tracking your vehicle expenses today</p>
         </div>
 
