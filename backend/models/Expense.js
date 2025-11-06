@@ -107,6 +107,12 @@ const ExpenseSchema = new mongoose.Schema({
     min: 0,
     comment: 'Odometer reading at next fueling for mileage calculation'
   },
+  // Calculated mileage (kms/litre) - stored when both odometer readings are available
+  mileage: {
+    type: Number,
+    min: 0,
+    comment: 'Calculated mileage in kms/litre'
+  },
   // Service specific fields
   serviceDescription: {
     type: String,
@@ -201,6 +207,16 @@ ExpenseSchema.pre('save', function(next) {
     this.pricePerUnit = this.amount / this.totalFuel;
   }
 
+  // Calculate mileage for fuel expenses when both odometer readings are available
+  if (this.expenseType === 'Fuel' && this.odometerReading && this.nextFuelingOdometer && this.fuelAdded) {
+    const distanceTraveled = this.nextFuelingOdometer - this.odometerReading;
+    if (distanceTraveled > 0 && this.fuelAdded > 0) {
+      this.mileage = distanceTraveled / this.fuelAdded; // kms per litre
+    } else {
+      this.mileage = undefined; // Clear mileage if calculations are invalid
+    }
+  }
+
   next();
 });
 
@@ -273,7 +289,7 @@ ExpenseSchema.statics.getVehicleExpenseStats = async function(vehicleId, startDa
     {
       $group: {
         _id: null,
-        totalExpenses: { $sum: '$totalAmount' },
+        totalExpenses: { $sum: '$amount' },
         expenseBreakdown: {
           $push: {
             type: '$_id',
@@ -322,8 +338,9 @@ ExpenseSchema.statics.calculateAndUpdateMileage = async function(vehicleId) {
     const fuelUsed = nextExpense.fuelAdded;
 
     if (distanceTraveled > 0 && fuelUsed > 0) {
-      // Update current expense with next fueling odometer
+      // Update current expense with next fueling odometer and calculated mileage
       currentExpense.nextFuelingOdometer = nextExpense.odometerReading;
+      currentExpense.mileage = distanceTraveled / fuelUsed; // km per liter
       await currentExpense.save();
 
       const mileage = distanceTraveled / fuelUsed; // km per liter
