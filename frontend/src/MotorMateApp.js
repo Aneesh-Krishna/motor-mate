@@ -500,6 +500,15 @@ const DashboardPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Expense management state
+  const [showExpenseModal, setShowExpenseModal] = useState(false);
+  const [showExpensesList, setShowExpensesList] = useState(false);
+  const [expenseFormType, setExpenseFormType] = useState('Fuel'); // 'Fuel', 'Service', 'Other'
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [expenses, setExpenses] = useState([]);
+  const [expenseStats, setExpenseStats] = useState(null);
+  const [expensesLoading, setExpensesLoading] = useState(false);
+
   // API call function
   const apiCall = async (endpoint, options = {}) => {
     const token = localStorage.getItem('token');
@@ -541,6 +550,17 @@ const DashboardPage = () => {
     localStorage.setItem('currentPage', 'dashboard');
     fetchVehicles();
   }, []);
+
+  // Load expenses and stats when vehicle is selected
+  React.useEffect(() => {
+    if (selectedVehicle) {
+      fetchExpenses(selectedVehicle._id);
+      fetchExpenseStats(selectedVehicle._id);
+    } else {
+      setExpenses([]);
+      setExpenseStats(null);
+    }
+  }, [selectedVehicle]);
 
   const fetchVehicles = async () => {
     try {
@@ -603,15 +623,37 @@ const DashboardPage = () => {
     }
   };
 
+  const handleCalculateMileage = async (vehicleId) => {
+    try {
+      setLoading(true);
+      const response = await apiCall(`/expenses/calculate-mileage/${vehicleId}`, {
+        method: 'POST'
+      });
+
+      if (response.data && response.data.length > 0) {
+        // Refresh expenses to show updated mileage information
+        await fetchExpenses();
+
+        setSuccessMessage(`Mileage calculated for ${response.data.length} fuel expense(s)!`);
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } else {
+        setErrorMessage('No fuel expenses found for mileage calculation. Add at least 2 fuel expenses with odometer readings.');
+        setTimeout(() => setErrorMessage(''), 5000);
+      }
+    } catch (error) {
+      console.error('Error calculating mileage:', error);
+      setErrorMessage('Error calculating mileage: ' + error.message);
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleVehicleSelect = (vehicle) => {
     setSelectedVehicle(vehicle);
   };
 
-  const handleQuickAction = (action) => {
-    setSuccessMessage(`${action} functionality would be implemented here`);
-    setTimeout(() => setSuccessMessage(''), 3000);
-  };
-
+  
   const handleVehicleSubmit = async (vehicleData) => {
     try {
       setLoading(true);
@@ -652,6 +694,148 @@ const DashboardPage = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Expense-related functions
+  const fetchExpenses = async (vehicleId = null) => {
+    try {
+      setExpensesLoading(true);
+      const endpoint = vehicleId ? `/expenses?vehicleId=${vehicleId}` : '/expenses';
+      const response = await apiCall(endpoint);
+      setExpenses(response.data);
+    } catch (error) {
+      console.error('Error fetching expenses:', error);
+      setErrorMessage('Error fetching expenses: ' + error.message);
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setExpensesLoading(false);
+    }
+  };
+
+  const fetchExpenseStats = async (vehicleId) => {
+    try {
+      const response = await apiCall(`/expenses/stats/${vehicleId}`);
+      setExpenseStats(response.data);
+    } catch (error) {
+      console.error('Error fetching expense stats:', error);
+      setExpenseStats(null);
+    }
+  };
+
+  const handleQuickAction = (action) => {
+    if (!selectedVehicle) {
+      setErrorMessage('Please select a vehicle first');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
+    switch (action) {
+      case 'Log Fuel':
+        setExpenseFormType('Fuel');
+        setEditingExpense(null);
+        setShowExpenseModal(true);
+        break;
+      case 'Log Service':
+        setExpenseFormType('Service');
+        setEditingExpense(null);
+        setShowExpenseModal(true);
+        break;
+      case 'Log Expense':
+        setExpenseFormType('Other');
+        setEditingExpense(null);
+        setShowExpenseModal(true);
+        break;
+      default:
+        setSuccessMessage(`${action} functionality would be implemented here`);
+        setTimeout(() => setSuccessMessage(''), 3000);
+    }
+  };
+
+  const handleExpenseSubmit = async (expenseData) => {
+    try {
+      setExpensesLoading(true);
+
+      if (editingExpense) {
+        // Update existing expense
+        const toSendData = { ...expenseData, fuelAmount: expenseData?.fuelAmount || expenseData?.fuelAdded || 0, nextFuelingOdometer: expenseData?.nextFuelingOdometer && expenseData?.nextFuelingOdometer > 0 ? expenseData?.nextFuelingOdometer : 0 };
+        const response = await apiCall(`/expenses/${editingExpense._id}`, {
+          method: 'PUT',
+          body: JSON.stringify(toSendData)
+        });
+
+        const updatedExpenses = expenses.map(e =>
+          e._id === editingExpense._id ? response.data : e
+        );
+        setExpenses(updatedExpenses);
+        setSuccessMessage('Expense updated successfully!');
+      } else {
+        // Add new expense
+        const toSendData = { ...expenseData, fuelAmount: expenseData?.fuelAmount || expenseData?.fuelAdded || 0 };
+        const response = await apiCall('/expenses', {
+          method: 'POST',
+          body: JSON.stringify(toSendData)
+        });
+
+        setExpenses([response.data, ...expenses]);
+        setSuccessMessage('Expense added successfully!');
+      }
+
+      setShowExpenseModal(false);
+      setEditingExpense(null);
+
+      // Refresh stats
+      if (selectedVehicle) {
+        fetchExpenseStats(selectedVehicle._id);
+      }
+
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      setErrorMessage('Failed to save expense: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setExpensesLoading(false);
+    }
+  };
+
+  const handleDeleteExpense = async (expenseId) => {
+    if (window.confirm('Are you sure you want to delete this expense?')) {
+      try {
+        setExpensesLoading(true);
+        await apiCall(`/expenses/${expenseId}`, {
+          method: 'DELETE'
+        });
+
+        const updatedExpenses = expenses.filter(e => e._id !== expenseId);
+        setExpenses(updatedExpenses);
+        setSuccessMessage('Expense deleted successfully!');
+
+        // Refresh stats
+        if (selectedVehicle) {
+          fetchExpenseStats(selectedVehicle._id);
+        }
+
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (error) {
+        console.error('Error deleting expense:', error);
+        setErrorMessage('Failed to delete expense: ' + error.message);
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        setExpensesLoading(false);
+      }
+    }
+  };
+
+  const handleEditExpense = (expense) => {
+    // Close the view modal first
+    setShowExpensesList(false);
+    // Then set up the edit modal
+    setEditingExpense(expense);
+    setExpenseFormType(expense.expenseType);
+    // Use setTimeout to ensure view modal is closed before opening edit modal
+    setTimeout(() => {
+      setShowExpenseModal(true);
+    }, 100);
   };
 
   // Display messages
@@ -913,6 +1097,24 @@ const DashboardPage = () => {
                     >
                       Delete
                     </button>
+                    <button
+                      onClick={() => handleCalculateMileage(selectedVehicle._id)}
+                      style={{
+                        backgroundColor: '#10b981',
+                        color: '#ffffff',
+                        padding: '0.5rem 1rem',
+                        borderRadius: '0.5rem',
+                        fontWeight: '500',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
+                      title="Calculate mileage from fuel expenses"
+                    >
+                      📊 Calculate Mileage
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1025,55 +1227,142 @@ const DashboardPage = () => {
                   </div>
                 </div>
 
+                {/* Expense Statistics Card */}
+                <div className="info-card">
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
+                    Expense Summary
+                  </h3>
+                  {expenseStats && expenseStats.stats ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Expenses:</span>
+                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
+                          ${expenseStats.stats.totalExpenses?.toFixed(2) || '0.00'}
+                        </span>
+                      </div>
+                      {expenseStats.stats.expenseBreakdown?.map((item, index) => (
+                        <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>{item.type}:</span>
+                          <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#111827' }}>
+                            ${item.total?.toFixed(2) || '0.00'} ({item.count || 0})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '1rem', color: '#6b7280' }}>
+                      <div>No expense data available</div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setShowExpensesList(true)}
+                    style={{
+                      width: '100%',
+                      marginTop: '1rem',
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '0.5rem',
+                      fontWeight: '500',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'background-color 150ms ease-in-out'
+                    }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
+                  >
+                    View All Expenses
+                  </button>
+                </div>
+
                 {/* Quick Actions Card */}
-                <div className="info-card" style={{ gridColumn: '1 / -1' }}>
+                <div className="info-card">
                   <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
                     Quick Actions
                   </h3>
-                  <div className="quick-actions-grid">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                     <button
                       onClick={() => handleQuickAction('Log Fuel')}
-                      className="quick-action-btn"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        width: '100%',
+                        padding: '0.75rem',
+                        backgroundColor: '#dbeafe',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#bfdbfe'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#dbeafe'}
                     >
-                      <div className="quick-action-icon" style={{ backgroundColor: '#dbeafe' }}>
-                        <svg className="w-6 h-6" style={{ color: '#2563eb' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div style={{ backgroundColor: '#3b82f6', padding: '0.5rem', borderRadius: '0.375rem' }}>
+                        <svg className="w-5 h-5" style={{ color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                       </div>
-                      <div>
-                        <p style={{ fontWeight: '500', color: '#111827' }}>Log Fuel</p>
-                        <p style={{ fontSize: '0.875rem', color: '#4b5563' }}>Track fuel expenses</p>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '500', color: '#111827' }}>Log Fuel</div>
+                        <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>Track fuel expenses</div>
                       </div>
                     </button>
 
                     <button
                       onClick={() => handleQuickAction('Log Service')}
-                      className="quick-action-btn"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        width: '100%',
+                        padding: '0.75rem',
+                        backgroundColor: '#dcfce7',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#bbf7d0'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#dcfce7'}
                     >
-                      <div className="quick-action-icon" style={{ backgroundColor: '#dcfce7' }}>
-                        <svg className="w-6 h-6" style={{ color: '#059669' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div style={{ backgroundColor: '#059669', padding: '0.5rem', borderRadius: '0.375rem' }}>
+                        <svg className="w-5 h-5" style={{ color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                         </svg>
                       </div>
-                      <div>
-                        <p style={{ fontWeight: '500', color: '#111827' }}>Log Service</p>
-                        <p style={{ fontSize: '0.875rem', color: '#4b5563' }}>Record maintenance</p>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '500', color: '#111827' }}>Log Service</div>
+                        <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>Record maintenance</div>
                       </div>
                     </button>
 
                     <button
                       onClick={() => handleQuickAction('Log Expense')}
-                      className="quick-action-btn"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        width: '100%',
+                        padding: '0.75rem',
+                        backgroundColor: '#fee2e2',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#fecaca'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#fee2e2'}
                     >
-                      <div className="quick-action-icon" style={{ backgroundColor: '#fee2e2' }}>
-                        <svg className="w-6 h-6" style={{ color: '#ef4444' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div style={{ backgroundColor: '#ef4444', padding: '0.5rem', borderRadius: '0.375rem' }}>
+                        <svg className="w-5 h-5" style={{ color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
-                      <div>
-                        <p style={{ fontWeight: '500', color: '#111827' }}>Log Expense</p>
-                        <p style={{ fontSize: '0.875rem', color: '#4b5563' }}>Track other costs</p>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '500', color: '#111827' }}>Log Expense</div>
+                        <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>Track other costs</div>
                       </div>
                     </button>
                   </div>
@@ -1390,7 +1679,1215 @@ const DashboardPage = () => {
           </div>
         </div>
       )}
+
+      {/* Expense Form Modal */}
+      {showExpenseModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100
+          }}
+          onClick={() => {
+            setShowExpenseModal(false);
+            setEditingExpense(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '1rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              padding: '2rem',
+              width: '90%',
+              maxWidth: '600px',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>
+                {editingExpense ? '✏️ Edit Expense' : `➕ Add ${expenseFormType} Expense`}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowExpenseModal(false);
+                  setEditingExpense(null);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <ExpenseForm
+              vehicle={selectedVehicle}
+              expense={editingExpense}
+              expenseType={expenseFormType}
+              userVehicles={vehicles}
+              onSuccess={handleExpenseSubmit}
+              onClose={() => {
+                setShowExpenseModal(false);
+                setEditingExpense(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Expenses List Modal */}
+      {showExpensesList && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '1rem',
+            width: '90%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '2rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem'
+            }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>
+                💰 All Expenses - {selectedVehicle?.vehicleName || 'Selected Vehicle'}
+              </h2>
+              <button
+                onClick={() => setShowExpensesList(false)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  padding: '0.25rem'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {expensesLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
+                <div>Loading expenses...</div>
+              </div>
+            ) : expenses.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '3rem',
+                backgroundColor: '#f9fafb',
+                borderRadius: '0.75rem',
+                border: '2px dashed #d1d5db'
+              }}>
+                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>💸</div>
+                <h3 style={{ color: '#4b5563', marginBottom: '0.5rem' }}>No expenses recorded</h3>
+                <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
+                  Start tracking your vehicle expenses by adding your first expense.
+                </p>
+                <button
+                  onClick={() => {
+                    setShowExpensesList(false);
+                    setExpenseFormType('Fuel');
+                    setShowExpenseModal(true);
+                  }}
+                  style={{
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Add First Expense
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {expenses.map((expense) => (
+                  <div key={expense._id} style={{
+                    backgroundColor: '#f9fafb',
+                    padding: '1.5rem',
+                    borderRadius: '0.75rem',
+                    border: '1px solid #e5e7eb',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start'
+                  }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                        <span style={{
+                          backgroundColor: expense.expenseType === 'Fuel' ? '#dbeafe' :
+                                         expense.expenseType === 'Service' ? '#dcfce7' : '#fee2e2',
+                          color: expense.expenseType === 'Fuel' ? '#1e40af' :
+                                 expense.expenseType === 'Service' ? '#065f46' : '#991b1b',
+                          padding: '0.25rem 0.75rem',
+                          borderRadius: '9999px',
+                          fontSize: '0.75rem',
+                          fontWeight: '600'
+                        }}>
+                          {expense.expenseType}
+                        </span>
+                        <span style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827' }}>
+                          ₹{expense.amount.toFixed(2)}
+                        </span>
+                      </div>
+
+                      {/* Vehicle Information */}
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280', marginBottom: '0.25rem', fontWeight: '500' }}>
+                        🚗 {expense.vehicle?.vehicleName} ({expense.vehicle?.company} {expense.vehicle?.model})
+                        {expense.vehicle?.vehicleRegistrationNumber && ` • ${expense.vehicle.vehicleRegistrationNumber}`}
+                      </div>
+
+                      <div style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '0.5rem' }}>
+                        {expense.expenseType === 'Fuel' && (
+                          <>
+                            {expense.fuelAdded ? `${expense.fuelAdded}L added` : ''}
+                            {expense.totalCost && ` • ₹${expense.totalCost.toFixed(2)}`}
+                            {expense.odometerReading && ` • ${expense.odometerReading.toLocaleString()} km`}
+                            {expense.mileageInfo && (
+                              <div style={{
+                                backgroundColor: '#dcfce7',
+                                color: '#166534',
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '0.375rem',
+                                fontSize: '0.75rem',
+                                fontWeight: '600',
+                                marginTop: '0.25rem',
+                                display: 'inline-block'
+                              }}>
+                                📊 {expense.mileageInfo}
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {expense.expenseType === 'Service' && (
+                          <>
+                            {expense.serviceType || 'Service'}
+                            {expense.serviceDescription && ` • ${expense.serviceDescription}`}
+                            {expense.odometerReading && ` • ${expense.odometerReading.toLocaleString()} km`}
+                          </>
+                        )}
+                        {expense.expenseType === 'Other' && (
+                          <>
+                            {expense.otherExpenseType || 'Other'} • {expense.description}
+                          </>
+                        )}
+                      </div>
+
+                      <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>
+                        {new Date(expense.date).toLocaleDateString()} at {new Date(expense.date).toLocaleTimeString()}
+                        {expense.location && ` • ${expense.location}`}
+                        {expense.paymentMethod && ` • ${expense.paymentMethod}`}
+                      </div>
+
+                      {expense.notes && (
+                        <div style={{ fontSize: '0.875rem', color: '#4b5563', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                          Note: {expense.notes}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', marginLeft: '1rem' }}>
+                      <button
+                        onClick={() => handleEditExpense(expense)}
+                        style={{
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          padding: '0.5rem',
+                          borderRadius: '0.5rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'background-color 150ms ease-in-out'
+                        }}
+                        onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
+                        onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
+                        title="Edit Expense"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteExpense(expense._id)}
+                        style={{
+                          backgroundColor: '#ef4444',
+                          color: 'white',
+                          padding: '0.5rem',
+                          borderRadius: '0.5rem',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'background-color 150ms ease-in-out'
+                        }}
+                        onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
+                        onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                        title="Delete Expense"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
+  );
+};
+
+// ExpenseForm Component
+const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVehicles = [] }) => {
+  const [formData, setFormData] = useState({
+    vehicle: vehicle?._id || '',
+    expenseType: expenseType,
+    otherExpenseType: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    description: '',
+    receiptNumber: '',
+    odometerReading: '',
+    // Fuel specific
+    totalFuel: '',
+    totalCost: '',
+    fuelAdded: '',
+    nextFuelingOdometer: '',
+    // Service specific
+    serviceDescription: '',
+    serviceType: 'General Maintenance',
+    // Common
+    notes: '',
+    location: '',
+    paymentMethod: 'Cash'
+  });
+
+  // Update form data when vehicle changes
+  React.useEffect(() => {
+    if (vehicle) {
+      setFormData(prev => ({
+        ...prev,
+        vehicle: vehicle._id
+      }));
+    }
+  }, [vehicle]);
+
+  // Update form data when expense changes (for editing)
+  React.useEffect(() => {
+    if (expense) {
+      setFormData({
+        vehicle: vehicle?._id || expense.vehicle?._id || '',
+        expenseType: expense.expenseType,
+        otherExpenseType: expense.otherExpenseType || '',
+        amount: expense.amount || '',
+        date: expense.date ? new Date(expense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        description: expense.description || '',
+        receiptNumber: expense.receiptNumber || '',
+        odometerReading: expense.odometerReading || '',
+        // Fuel specific
+        totalFuel: expense.totalFuel || '',
+        totalCost: expense.totalCost || '',
+        fuelAdded: expense.fuelAdded || '',
+        nextFuelingOdometer: expense.nextFuelingOdometer || '',
+        // Service specific
+        serviceDescription: expense.serviceDescription || '',
+        serviceType: expense.serviceType || 'General Maintenance',
+        // Common
+        notes: expense.notes || '',
+        location: expense.location || '',
+        paymentMethod: expense.paymentMethod || 'Cash'
+      });
+    } else {
+      // Reset form for new expense
+      setFormData({
+        vehicle: vehicle?._id || '',
+        expenseType: expenseType,
+        otherExpenseType: '',
+        amount: '',
+        date: new Date().toISOString().split('T')[0],
+        description: '',
+        receiptNumber: '',
+        odometerReading: '',
+        // Fuel specific
+        totalFuel: '',
+        totalCost: '',
+        fuelAdded: '',
+        nextFuelingOdometer: '',
+        // Service specific
+        serviceDescription: '',
+        serviceType: 'General Maintenance',
+        // Common
+        notes: '',
+        location: '',
+        paymentMethod: 'Cash'
+      });
+    }
+  }, [expense, vehicle, expenseType]);
+
+  const [errors, setErrors] = useState({});
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      newErrors.amount = 'Amount must be greater than 0 (INR)';
+    }
+
+    if (!formData.date) {
+      newErrors.date = 'Date is required';
+    }
+
+    if (!formData.vehicle && !vehicle) {
+      newErrors.vehicle = 'Vehicle is required';
+    }
+
+    if (!formData.description || !formData.description.trim()) {
+      newErrors.description = 'Description is required';
+    }
+
+    if (!formData.odometerReading || parseFloat(formData.odometerReading) < 0) {
+      newErrors.odometerReading = 'Odometer reading is required';
+    }
+
+    const currentExpenseType = expense?.expenseType || expenseType;
+
+    if (currentExpenseType === 'Fuel') {
+      if (!formData.fuelAdded || parseFloat(formData.fuelAdded) <= 0) {
+        newErrors.fuelAdded = 'Fuel added must be greater than 0';
+      }
+      if (!formData.totalFuel || parseFloat(formData.totalFuel) <= 0) {
+        newErrors.totalFuel = 'Total fuel must be greater than 0';
+      }
+      if (!formData.totalCost || parseFloat(formData.totalCost) <= 0) {
+        newErrors.totalCost = 'Total cost must be greater than 0';
+      }
+    }
+
+    if (currentExpenseType === 'Service') {
+      if (!formData.serviceDescription || !formData.serviceDescription.trim()) {
+        newErrors.serviceDescription = 'Service description is required';
+      }
+    }
+
+    if (currentExpenseType === 'Other') {
+      if (!formData.otherExpenseType || !formData.otherExpenseType.trim()) {
+        newErrors.otherExpenseType = 'Other expense type specification is required';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+
+    // If expense type is changing, reset type-specific fields
+    if (name === 'expenseType') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        // Reset fuel-specific fields
+        totalFuel: '',
+        totalCost: '',
+        fuelAdded: '',
+        nextFuelingOdometer: '',
+        // Reset service-specific fields
+        serviceDescription: '',
+        serviceType: 'General Maintenance',
+        // Reset other-specific fields
+        otherExpenseType: ''
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const currentExpenseType = expense?.expenseType || formData.expenseType;
+
+    if (!validateForm()) {
+      return;
+    }
+
+    // Clean form data before submitting
+    const cleanedFormData = { ...formData };
+
+    // Use provided vehicle if no vehicle selected in form
+    if (!cleanedFormData.vehicle && vehicle) {
+      cleanedFormData.vehicle = vehicle._id;
+    }
+
+    // Ensure vehicle is just the ID string, not the entire object
+    if (cleanedFormData.vehicle && typeof cleanedFormData.vehicle === 'object') {
+      cleanedFormData.vehicle = cleanedFormData.vehicle._id || cleanedFormData.vehicle.id;
+    }
+
+    // Convert numeric fields
+    ['amount', 'odometerReading', 'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer'].forEach(field => {
+      if (cleanedFormData[field]) {
+        cleanedFormData[field] = parseFloat(cleanedFormData[field]);
+      }
+    });
+
+    // Only include relevant fields based on expense type
+    const submissionData = {
+      vehicle: cleanedFormData.vehicle,
+      expenseType: cleanedFormData.expenseType,
+      amount: cleanedFormData.amount,
+      date: cleanedFormData.date,
+      description: cleanedFormData.description,
+      odometerReading: cleanedFormData.odometerReading,
+      receiptNumber: cleanedFormData.receiptNumber,
+      paymentMethod: cleanedFormData.paymentMethod,
+      location: cleanedFormData.location,
+      notes: cleanedFormData.notes
+    };
+
+    if (currentExpenseType === 'Fuel') {
+      submissionData.totalFuel = cleanedFormData.totalFuel;
+      submissionData.totalCost = cleanedFormData.totalCost;
+      submissionData.fuelAdded = cleanedFormData.fuelAdded;
+      submissionData.nextFuelingOdometer = cleanedFormData.nextFuelingOdometer;
+    } else if (currentExpenseType === 'Service') {
+      submissionData.serviceDescription = cleanedFormData.serviceDescription;
+      submissionData.serviceType = cleanedFormData.serviceType;
+    } else if (currentExpenseType === 'Other') {
+      submissionData.otherExpenseType = cleanedFormData.otherExpenseType;
+    }
+
+    if (onSuccess) {
+      onSuccess(submissionData);
+    }
+
+    if (onClose) {
+      onClose();
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '1.5rem' }}>
+      {/* Expense Type Selection - only show for new expenses, not editing */}
+      {!expense && (
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Expense Type <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <select
+            name="expenseType"
+            value={formData.expenseType}
+            onChange={handleInputChange}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem',
+              backgroundColor: '#ffffff'
+            }}
+          >
+            <option value="Fuel">⛽ Fuel</option>
+            <option value="Service">🔧 Service</option>
+            <option value="Other">📋 Other</option>
+          </select>
+        </div>
+      )}
+
+      {/* Vehicle Selection - always show vehicle dropdown for new expenses */}
+      {!vehicle && !expense && userVehicles.length > 0 && (
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Vehicle <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <select
+            name="vehicle"
+            value={formData.vehicle}
+            onChange={handleInputChange}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: `1px solid ${errors.vehicle ? '#ef4444' : '#d1d5db'}`,
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          >
+            <option value="">Select a vehicle</option>
+            {userVehicles.map(v => (
+              <option key={v._id} value={v._id}>
+                {v.vehicleName} ({v.company} {v.model}) - {v.vehicleRegistrationNumber}
+              </option>
+            ))}
+          </select>
+          {errors.vehicle && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.vehicle}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Show vehicle info when editing or when vehicle is provided via prop */}
+      {(vehicle || expense) && (
+        <div style={{
+          backgroundColor: '#f0f9ff',
+          padding: '1rem',
+          borderRadius: '0.5rem',
+          marginBottom: '1rem'
+        }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#1e40af', marginBottom: '0.25rem' }}>
+            🚗 Vehicle: {(vehicle || expense.vehicle)?.vehicleName}
+          </div>
+          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+            {(vehicle || expense.vehicle)?.company} {(vehicle || expense.vehicle)?.model} • {(vehicle || expense.vehicle)?.vehicleRegistrationNumber}
+          </div>
+          {expense && (
+            <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '0.25rem' }}>
+              💰 Type: {expense.expenseType} (Cannot be changed when editing)
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Common Fields */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Amount (INR) <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="number"
+            name="amount"
+            value={formData.amount}
+            onChange={handleInputChange}
+            step="0.01"
+            placeholder="0.00"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: `1px solid ${errors.amount ? '#ef4444' : '#d1d5db'}`,
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+          {errors.amount && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.amount}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Date <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="date"
+            name="date"
+            value={formData.date}
+            onChange={handleInputChange}
+            max={new Date().toISOString().split('T')[0]}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: `1px solid ${errors.date ? '#ef4444' : '#d1d5db'}`,
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+          {errors.date && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.date}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Description and Odometer - required for all types */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Description <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="text"
+            name="description"
+            value={formData.description}
+            onChange={handleInputChange}
+            placeholder="Brief description of the expense"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: `1px solid ${errors.description ? '#ef4444' : '#d1d5db'}`,
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+          {errors.description && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.description}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Odometer Reading (kms) <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="number"
+            name="odometerReading"
+            value={formData.odometerReading}
+            onChange={handleInputChange}
+            placeholder="Current odometer reading"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: `1px solid ${errors.odometerReading ? '#ef4444' : '#d1d5db'}`,
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+          {errors.odometerReading && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.odometerReading}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Receipt Number (optional) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Receipt Number
+          </label>
+          <input
+            type="text"
+            name="receiptNumber"
+            value={formData.receiptNumber}
+            onChange={handleInputChange}
+            placeholder="Optional receipt number"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Payment Method
+          </label>
+          <select
+            name="paymentMethod"
+            value={formData.paymentMethod}
+            onChange={handleInputChange}
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          >
+            <option value="Cash">Cash</option>
+            <option value="Credit Card">Credit Card</option>
+            <option value="Debit Card">Debit Card</option>
+            <option value="Digital Wallet">Digital Wallet</option>
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Type-specific fields */}
+      {(expense?.expenseType || formData.expenseType) === 'Fuel' && (
+        <>
+          <div style={{ backgroundColor: '#f0f9ff', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#1e40af', fontSize: '0.875rem', fontWeight: '600' }}>
+              ⛽ Fuel Expense Details
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+              Enter fuel details to enable mileage calculation between fuelings
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                Total Fuel (liters) <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                name="totalFuel"
+                value={formData.totalFuel}
+                onChange={handleInputChange}
+                step="0.01"
+                placeholder="0.00"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: `1px solid ${errors.totalFuel ? '#ef4444' : '#d1d5db'}`,
+                  borderRadius: '0.5rem',
+                  fontSize: '1rem'
+                }}
+              />
+              {errors.totalFuel && (
+                <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                  {errors.totalFuel}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                Total Cost (INR) <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                name="totalCost"
+                value={formData.totalCost}
+                onChange={handleInputChange}
+                step="0.01"
+                placeholder="0.00"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: `1px solid ${errors.totalCost ? '#ef4444' : '#d1d5db'}`,
+                  borderRadius: '0.5rem',
+                  fontSize: '1rem'
+                }}
+              />
+              {errors.totalCost && (
+                <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                  {errors.totalCost}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                Fuel Added (liters) <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <input
+                type="number"
+                name="fuelAdded"
+                value={formData.fuelAdded}
+                onChange={handleInputChange}
+                step="0.01"
+                placeholder="0.00"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: `1px solid ${errors.fuelAdded ? '#ef4444' : '#d1d5db'}`,
+                  borderRadius: '0.5rem',
+                  fontSize: '1rem'
+                }}
+              />
+              {errors.fuelAdded && (
+                <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                  {errors.fuelAdded}
+                </div>
+              )}
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                Amount of fuel added during this fueling
+              </div>
+            </div>
+
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                Next Fueling Odometer (kms)
+              </label>
+              <input
+                type="number"
+                name="nextFuelingOdometer"
+                value={formData.nextFuelingOdometer}
+                onChange={handleInputChange}
+                placeholder="Odometer at next fueling"
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.5rem',
+                  fontSize: '1rem'
+                }}
+              />
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                Optional: Odometer reading at next fueling for mileage calculation
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {(expense?.expenseType || formData.expenseType) === 'Service' && (
+        <>
+          <div style={{ backgroundColor: '#f0fdf4', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#166534', fontSize: '0.875rem', fontWeight: '600' }}>
+              🔧 Service Expense Details
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+              Record maintenance and service expenses for your vehicle
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+            <div>
+              <label style={{
+                display: 'block',
+                fontSize: '0.875rem',
+                fontWeight: '500',
+                color: '#374151',
+                marginBottom: '0.5rem'
+              }}>
+                Service Type
+              </label>
+              <select
+                name="serviceType"
+                value={formData.serviceType}
+                onChange={handleInputChange}
+                style={{
+                  width: '100%',
+                  padding: '0.75rem',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '0.5rem',
+                  fontSize: '1rem',
+                  backgroundColor: '#ffffff'
+                }}
+              >
+                <option value="Oil Change">Oil Change</option>
+                <option value="Tire Service">Tire Service</option>
+                <option value="Brake Service">Brake Service</option>
+                <option value="Engine Service">Engine Service</option>
+                <option value="Transmission Service">Transmission Service</option>
+                <option value="Battery Service">Battery Service</option>
+                <option value="AC Service">AC Service</option>
+                <option value="General Maintenance">General Maintenance</option>
+                <option value="Repair">Repair</option>
+                <option value="Inspection">Inspection</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem'
+            }}>
+              Service Description <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <textarea
+              name="serviceDescription"
+              value={formData.serviceDescription}
+              onChange={handleInputChange}
+              placeholder="Describe the service performed"
+              rows={3}
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: `1px solid ${errors.serviceDescription ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '0.5rem',
+                fontSize: '1rem',
+                resize: 'vertical'
+              }}
+            />
+            {errors.serviceDescription && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                {errors.serviceDescription}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {(expense?.expenseType || formData.expenseType) === 'Other' && (
+        <>
+          <div style={{ backgroundColor: '#fef2f2', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1rem' }}>
+            <h4 style={{ margin: '0 0 0.5rem 0', color: '#991b1b', fontSize: '0.875rem', fontWeight: '600' }}>
+              📋 Other Expense Details
+            </h4>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: '#64748b' }}>
+              Specify the type of other expense for better categorization
+            </p>
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              color: '#374151',
+              marginBottom: '0.5rem'
+            }}>
+              Other Expense Type <span style={{ color: '#ef4444' }}>*</span>
+            </label>
+            <input
+              type="text"
+              name="otherExpenseType"
+              value={formData.otherExpenseType}
+              onChange={handleInputChange}
+              placeholder="e.g., Parking, Toll, Car Wash, Insurance, etc."
+              style={{
+                width: '100%',
+                padding: '0.75rem',
+                border: `1px solid ${errors.otherExpenseType ? '#ef4444' : '#d1d5db'}`,
+                borderRadius: '0.5rem',
+                fontSize: '1rem'
+              }}
+            />
+            {errors.otherExpenseType && (
+              <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                {errors.otherExpenseType}
+              </div>
+            )}
+            <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+              Specify what type of other expense this is (e.g., Parking, Toll, Car Wash, Insurance, Registration, Tax, Fine, Accessories, etc.)
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Optional common fields */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Location
+          </label>
+          <input
+            type="text"
+            name="location"
+            value={formData.location}
+            onChange={handleInputChange}
+            placeholder="Where was this expense incurred?"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Receipt Number
+          </label>
+          <input
+            type="text"
+            name="receiptNumber"
+            value={formData.receiptNumber}
+            onChange={handleInputChange}
+            placeholder="Receipt or reference number"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '1rem'
+            }}
+          />
+        </div>
+      </div>
+
+      <div>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Notes
+        </label>
+        <textarea
+          name="notes"
+          value={formData.notes}
+          onChange={handleInputChange}
+          placeholder="Any additional notes about this expense"
+          rows={2}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '1rem',
+            resize: 'vertical'
+          }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+        <button
+          type="button"
+          onClick={onClose}
+          style={{
+            backgroundColor: '#6b7280',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            borderRadius: '0.5rem',
+            fontWeight: '500',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background-color 150ms ease-in-out'
+          }}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          style={{
+            backgroundColor: '#10b981',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            borderRadius: '0.5rem',
+            fontWeight: '500',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background-color 150ms ease-in-out'
+          }}
+        >
+          {expense ? '💾 Update Expense' : '➕ Add Expense'}
+        </button>
+      </div>
+    </form>
   );
 };
 
