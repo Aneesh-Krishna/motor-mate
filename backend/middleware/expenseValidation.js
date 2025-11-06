@@ -60,12 +60,6 @@ const expenseValidationRules = () => {
       .withMessage('Odometer reading must be a non-negative integer'),
 
     // Fuel-specific validations (conditional)
-    body('fuelAmount')
-      .if(body('expenseType').equals('Fuel'))
-      .notEmpty()
-      .withMessage('Fuel amount is required for fuel expenses')
-      .isFloat({ gt: 0 })
-      .withMessage('Fuel amount must be a positive number'),
 
     body('totalFuel')
       .if(body('expenseType').equals('Fuel'))

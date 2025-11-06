@@ -59,20 +59,6 @@ const ExpenseSchema = new mongoose.Schema({
     comment: 'Odometer reading in kilometers'
   },
   // Fuel specific fields
-  fuelAmount: {
-    type: Number,
-    required: function() {
-      return this.expenseType === 'Fuel';
-    },
-    min: 0,
-    validate: {
-      validator: function(value) {
-        // Only validate fuel amount if expense type is Fuel
-        return this.expenseType !== 'Fuel' || (value > 0);
-      },
-      message: 'Fuel amount is required and must be greater than 0 for fuel expenses'
-    }
-  },
   // Total fuel in liters (floating point)
   totalFuel: {
     type: Number,
@@ -169,9 +155,7 @@ const ExpenseSchema = new mongoose.Schema({
       'Accessories',
       'Other'
     ],
-    required: function() {
-      return this.expenseType === 'Other';
-    }
+    required: false // Made optional since frontend doesn't provide this field
   },
   // Common fields
   notes: {
@@ -213,8 +197,8 @@ ExpenseSchema.pre('save', function(next) {
   this.updatedAt = new Date();
 
   // Calculate price per unit for fuel expenses if not provided
-  if (this.expenseType === 'Fuel' && this.fuelAmount > 0 && !this.pricePerUnit) {
-    this.pricePerUnit = this.amount / this.fuelAmount;
+  if (this.expenseType === 'Fuel' && this.totalFuel > 0 && !this.pricePerUnit) {
+    this.pricePerUnit = this.amount / this.totalFuel;
   }
 
   next();
@@ -228,9 +212,9 @@ ExpenseSchema.index({ date: -1, isActive: 1 });
 
 // Virtual for expense display info
 ExpenseSchema.virtual('displayInfo').get(function() {
-  let info = `${this.expenseType}: $${this.amount.toFixed(2)}`;
-  if (this.expenseType === 'Fuel' && this.fuelAmount) {
-    info += ` (${this.fuelAmount} ${this.fuelUnit})`;
+  let info = `${this.expenseType}: ₹${this.amount.toFixed(2)}`;
+  if (this.expenseType === 'Fuel' && this.totalFuel) {
+    info += ` (${this.totalFuel}L)`;
   }
   return info;
 });
