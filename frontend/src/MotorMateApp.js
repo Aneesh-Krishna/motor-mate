@@ -1237,14 +1237,14 @@ const DashboardPage = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Expenses:</span>
                         <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
-                          ${expenseStats.stats.totalExpenses?.toFixed(2) || '0.00'}
+                          ₹{expenseStats.stats.totalExpenses?.toFixed(2) || '0.00'}
                         </span>
                       </div>
                       {expenseStats.stats.expenseBreakdown?.map((item, index) => (
                         <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>{item.type}:</span>
                           <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#111827' }}>
-                            ${item.total?.toFixed(2) || '0.00'} ({item.count || 0})
+                            ₹${item.total?.toFixed(2) || '0.00'} ({item.count || 0})
                           </span>
                         </div>
                       ))}

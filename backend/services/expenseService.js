@@ -29,7 +29,8 @@ class ExpenseService {
       totalFuel: expenseData.totalFuel ? parseFloat(expenseData.totalFuel) : undefined,
       totalCost: expenseData.totalCost ? parseFloat(expenseData.totalCost) : undefined,
       fuelAdded: expenseData.fuelAdded ? parseFloat(expenseData.fuelAdded) : undefined,
-      nextFuelingOdometer: expenseData.nextFuelingOdometer ? parseInt(expenseData.nextFuelingOdometer) : undefined
+      nextFuelingOdometer: expenseData.nextFuelingOdometer ? parseInt(expenseData.nextFuelingOdometer) : undefined,
+      mileage: expenseData.mileage ? parseFloat(expenseData.mileage) : undefined
     });
 
     try {
@@ -174,7 +175,7 @@ class ExpenseService {
     // Update fields
     const allowedFields = [
       'expenseType', 'otherExpenseType', 'amount', 'date', 'description', 'receiptNumber', 'odometerReading',
-      'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer',
+      'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer', 'mileage',
       'serviceDescription', 'serviceType', 'category',
       'notes', 'location', 'paymentMethod'
     ];
@@ -191,8 +192,8 @@ class ExpenseService {
             expense[field] = parsedValue;
           }
           // If the value is empty/null/undefined, don't update the existing value (preserve it)
-        } else if (field === 'amount' ||
-            field === 'totalFuel' || field === 'totalCost' || field === 'fuelAdded') {
+        } else if (field === 'amount' || field === 'totalFuel' || field === 'totalCost' ||
+                   field === 'fuelAdded' || field === 'mileage') {
           // Only update if the value is not empty string, null, or undefined
           if (updateData[field] !== '' && updateData[field] !== null && updateData[field] !== undefined) {
             const parsedValue = parseFloat(updateData[field]);
@@ -218,7 +219,7 @@ class ExpenseService {
       await expense.save();
 
       // Auto-update previous fuel expense's nextFuelingOdometer if this is a fuel expense and odometer changed
-      if (expense.expenseType === 'Fuel' && updateData.odometerReading && expense.odometerReading) {
+      if (expense.expenseType === 'Fuel' && updateData.odometerReading && (originalOdometerReading !== expense.odometerReading)) {
         await this.updatePreviousFuelExpenseNextOdometer(expense);
 
         // Also update the next fuel expense that was referencing this expense's old odometer
@@ -422,7 +423,7 @@ class ExpenseService {
             year: '$_id.year',
             month: '$_id.month'
           },
-          totalExpenses: { $sum: '$totalAmount' },
+          totalExpenses: { $sum: '$amount' },
           expenseBreakdown: {
             $push: {
               type: '$_id.expenseType',
@@ -490,6 +491,10 @@ class ExpenseService {
     if (data.nextFuelingOdometer !== undefined && data.nextFuelingOdometer < 0) {
       throw new Error('Next fueling odometer reading cannot be negative');
     }
+
+    if (data.mileage !== undefined && data.mileage < 0) {
+      throw new Error('Mileage cannot be negative');
+    }
   }
 
   /**
@@ -547,12 +552,14 @@ class ExpenseService {
       .sort({ odometerReading: -1, date: -1 }) // Get the most recent one by odometer and date
       .exec();
 
-      if (previousFuelExpense && !previousFuelExpense.nextFuelingOdometer) {
+      if (previousFuelExpense) {
         // Update the previous fuel expense's nextFuelingOdometer with current expense's odometer
+        // Update regardless of existing value to handle edits properly
+        const oldNextOdometer = previousFuelExpense.nextFuelingOdometer;
         previousFuelExpense.nextFuelingOdometer = newExpense.odometerReading;
         await previousFuelExpense.save();
 
-        console.log(`Updated previous fuel expense ${previousFuelExpense._id} nextFuelingOdometer to ${newExpense.odometerReading}`);
+        console.log(`Updated previous fuel expense ${previousFuelExpense._id} nextFuelingOdometer from ${oldNextOdometer} to ${newExpense.odometerReading}`);
       }
     } catch (error) {
       // Log the error but don't fail the expense creation
