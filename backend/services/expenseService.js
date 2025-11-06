@@ -26,7 +26,6 @@ class ExpenseService {
       amount: parseFloat(expenseData.amount),
       date: new Date(expenseData.date),
       odometerReading: expenseData.odometerReading ? parseInt(expenseData.odometerReading) : undefined,
-      fuelAmount: expenseData.fuelAmount ? parseFloat(expenseData.fuelAmount) : undefined,
       totalFuel: expenseData.totalFuel ? parseFloat(expenseData.totalFuel) : undefined,
       totalCost: expenseData.totalCost ? parseFloat(expenseData.totalCost) : undefined,
       fuelAdded: expenseData.fuelAdded ? parseFloat(expenseData.fuelAdded) : undefined,
@@ -35,6 +34,12 @@ class ExpenseService {
 
     try {
       await expense.save();
+
+      // Auto-update previous fuel expense's nextFuelingOdometer if this is a fuel expense
+      if (expense.expenseType === 'Fuel' && expense.odometerReading) {
+        await this.updatePreviousFuelExpenseNextOdometer(expense);
+      }
+
       await expense.populate('vehicle', 'vehicleName company model vehicleRegistrationNumber');
       return expense;
     } catch (saveError) {
@@ -470,9 +475,6 @@ class ExpenseService {
   async validateExpenseTypeSpecificFields(data) {
     switch (data.expenseType) {
       case 'Fuel':
-        if (!data.fuelAmount || data.fuelAmount <= 0) {
-          throw new Error('Fuel amount is required for fuel expenses');
-        }
         if (!data.totalFuel || data.totalFuel <= 0) {
           throw new Error('Total fuel is required for fuel expenses');
         }
@@ -501,6 +503,37 @@ class ExpenseService {
           throw new Error('Other expense type specification is required');
         }
         break;
+    }
+  }
+
+  /**
+   * Auto-update previous fuel expense's nextFuelingOdometer
+   * @param {Object} newExpense - Newly created fuel expense
+   */
+  async updatePreviousFuelExpenseNextOdometer(newExpense) {
+    try {
+      // Find the most recent fuel expense for the same vehicle, excluding the current one
+      const previousFuelExpense = await Expense.findOne({
+        _id: { $ne: newExpense._id }, // Exclude current expense
+        vehicle: newExpense.vehicle,
+        expenseType: 'Fuel',
+        isActive: true,
+        odometerReading: { $lt: newExpense.odometerReading } // Previous fueling should have lower odometer
+      })
+      .sort({ odometerReading: -1, date: -1 }) // Get the most recent one by odometer and date
+      .exec();
+
+      if (previousFuelExpense && !previousFuelExpense.nextFuelingOdometer) {
+        // Update the previous fuel expense's nextFuelingOdometer with current expense's odometer
+        previousFuelExpense.nextFuelingOdometer = newExpense.odometerReading;
+        await previousFuelExpense.save();
+
+        console.log(`Updated previous fuel expense ${previousFuelExpense._id} nextFuelingOdometer to ${newExpense.odometerReading}`);
+      }
+    } catch (error) {
+      // Log the error but don't fail the expense creation
+      console.error('Error updating previous fuel expense nextFuelingOdometer:', error);
+      // This is a non-critical operation, so we don't throw an error
     }
   }
 
