@@ -168,10 +168,13 @@ class ExpenseService {
     // Type-specific validation for updates
     await this.validateExpenseTypeSpecificFields({ ...expense.toObject(), ...updateData });
 
+    // Capture original odometer reading before update (for tracking changes)
+    const originalOdometerReading = expense.odometerReading;
+
     // Update fields
     const allowedFields = [
       'expenseType', 'otherExpenseType', 'amount', 'date', 'description', 'receiptNumber', 'odometerReading',
-      'fuelAmount', 'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer',
+      'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer',
       'serviceDescription', 'serviceType', 'category',
       'notes', 'location', 'paymentMethod'
     ];
@@ -179,28 +182,49 @@ class ExpenseService {
     allowedFields.forEach(field => {
       if (updateData[field] !== undefined) {
         if (field === 'odometerReading' || field === 'nextFuelingOdometer') {
-          const parsedValue = parseInt(updateData[field]);
-          if (isNaN(parsedValue)) {
-            throw new Error(`${field} must be a valid integer`);
+          // Only update if the value is not empty string, null, or undefined
+          if (updateData[field] !== '' && updateData[field] !== null && updateData[field] !== undefined) {
+            const parsedValue = parseInt(updateData[field]);
+            if (isNaN(parsedValue)) {
+              throw new Error(`${field} must be a valid integer`);
+            }
+            expense[field] = parsedValue;
           }
-          expense[field] = parsedValue;
-        } else if (field === 'amount' || field === 'fuelAmount' ||
+          // If the value is empty/null/undefined, don't update the existing value (preserve it)
+        } else if (field === 'amount' ||
             field === 'totalFuel' || field === 'totalCost' || field === 'fuelAdded') {
-          const parsedValue = parseFloat(updateData[field]);
-          if (isNaN(parsedValue)) {
-            throw new Error(`${field} must be a valid number`);
+          // Only update if the value is not empty string, null, or undefined
+          if (updateData[field] !== '' && updateData[field] !== null && updateData[field] !== undefined) {
+            const parsedValue = parseFloat(updateData[field]);
+            if (isNaN(parsedValue)) {
+              throw new Error(`${field} must be a valid number`);
+            }
+            expense[field] = parsedValue;
           }
-          expense[field] = parsedValue;
         } else if (field === 'date') {
-          expense[field] = new Date(updateData[field]);
+          if (updateData[field] !== '' && updateData[field] !== null && updateData[field] !== undefined) {
+            expense[field] = new Date(updateData[field]);
+          }
         } else {
-          expense[field] = updateData[field];
+          // For non-numeric fields, only update if not empty string
+          if (updateData[field] !== '' && updateData[field] !== null && updateData[field] !== undefined) {
+            expense[field] = updateData[field];
+          }
         }
       }
     });
 
     try {
       await expense.save();
+
+      // Auto-update previous fuel expense's nextFuelingOdometer if this is a fuel expense and odometer changed
+      if (expense.expenseType === 'Fuel' && updateData.odometerReading && expense.odometerReading) {
+        await this.updatePreviousFuelExpenseNextOdometer(expense);
+
+        // Also update the next fuel expense that was referencing this expense's old odometer
+        await this.updateNextFuelExpenseNextOdometer(expense, originalOdometerReading);
+      }
+
       await expense.populate('vehicle', 'vehicleName company model vehicleRegistrationNumber');
       return expense;
     } catch (saveError) {
@@ -508,7 +532,7 @@ class ExpenseService {
 
   /**
    * Auto-update previous fuel expense's nextFuelingOdometer
-   * @param {Object} newExpense - Newly created fuel expense
+   * @param {Object} newExpense - Newly created or updated fuel expense
    */
   async updatePreviousFuelExpenseNextOdometer(newExpense) {
     try {
@@ -533,6 +557,38 @@ class ExpenseService {
     } catch (error) {
       // Log the error but don't fail the expense creation
       console.error('Error updating previous fuel expense nextFuelingOdometer:', error);
+      // This is a non-critical operation, so we don't throw an error
+    }
+  }
+
+  /**
+   * Auto-update next fuel expense's nextFuelingOdometer when current expense's odometer changes
+   * @param {Object} updatedExpense - The updated fuel expense
+   * @param {number} oldOdometerReading - The original odometer reading before update
+   */
+  async updateNextFuelExpenseNextOdometer(updatedExpense, oldOdometerReading) {
+    try {
+      // Find the next fuel expense that was referencing the old odometer reading
+      const nextFuelExpense = await Expense.findOne({
+        _id: { $ne: updatedExpense._id }, // Exclude current expense
+        vehicle: updatedExpense.vehicle,
+        expenseType: 'Fuel',
+        isActive: true,
+        nextFuelingOdometer: oldOdometerReading // Find expense that had old odometer as nextFuelingOdometer
+      })
+      .sort({ odometerReading: 1, date: 1 }) // Get the next one by odometer and date
+      .exec();
+
+      if (nextFuelExpense) {
+        // Update the next fuel expense's nextFuelingOdometer with the new odometer reading
+        nextFuelExpense.nextFuelingOdometer = updatedExpense.odometerReading;
+        await nextFuelExpense.save();
+
+        console.log(`Updated next fuel expense ${nextFuelExpense._id} nextFuelingOdometer from ${oldOdometerReading} to ${updatedExpense.odometerReading}`);
+      }
+    } catch (error) {
+      // Log the error but don't fail the expense update
+      console.error('Error updating next fuel expense nextFuelingOdometer:', error);
       // This is a non-critical operation, so we don't throw an error
     }
   }
