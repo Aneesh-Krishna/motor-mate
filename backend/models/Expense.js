@@ -17,22 +17,46 @@ const ExpenseSchema = new mongoose.Schema({
     enum: ['Fuel', 'Service', 'Other'],
     default: 'Other'
   },
+  // For "Other" type - allow specification
+  otherExpenseType: {
+    type: String,
+    required: function() {
+      return this.expenseType === 'Other';
+    },
+    trim: true,
+    maxlength: 100
+  },
+  // All amounts in INR
   amount: {
     type: Number,
     required: true,
-    min: 0
+    min: 0,
+    comment: 'Amount in INR'
   },
   date: {
     type: Date,
     required: true,
     default: Date.now
   },
+  description: {
+    type: String,
+    required: true,
+    trim: true,
+    maxlength: 500
+  },
+  // Optional receipt number
+  receiptNumber: {
+    type: String,
+    trim: true,
+    maxlength: 100,
+    required: false
+  },
+  // Odometer reading in kms (required for all expense types)
   odometerReading: {
     type: Number,
-    required: function() {
-      return this.expenseType === 'Fuel' || this.expenseType === 'Service';
-    },
-    min: 0
+    required: true,
+    min: 0,
+    comment: 'Odometer reading in kilometers'
   },
   // Fuel specific fields
   fuelAmount: {
@@ -49,24 +73,53 @@ const ExpenseSchema = new mongoose.Schema({
       message: 'Fuel amount is required and must be greater than 0 for fuel expenses'
     }
   },
-  fuelUnit: {
-    type: String,
-    enum: ['liters', 'gallons'],
-    default: 'liters',
+  // Total fuel in liters (floating point)
+  totalFuel: {
+    type: Number,
     required: function() {
       return this.expenseType === 'Fuel';
-    }
-  },
-  pricePerUnit: {
-    type: Number,
+    },
     min: 0,
     validate: {
       validator: function(value) {
-        // Only calculate if it's a fuel expense and fuel amount is provided
-        return this.expenseType !== 'Fuel' || this.fuelAmount <= 0 || value >= 0;
+        return this.expenseType !== 'Fuel' || (value > 0);
       },
-      message: 'Price per unit must be non-negative for fuel expenses'
+      message: 'Total fuel is required and must be greater than 0 for fuel expenses'
     }
+  },
+  // Total cost in INR for fuel expenses
+  totalCost: {
+    type: Number,
+    required: function() {
+      return this.expenseType === 'Fuel';
+    },
+    min: 0,
+    validate: {
+      validator: function(value) {
+        return this.expenseType !== 'Fuel' || (value > 0);
+      },
+      message: 'Total cost is required and must be greater than 0 for fuel expenses'
+    }
+  },
+  // Fuel added in liters (floating point)
+  fuelAdded: {
+    type: Number,
+    required: function() {
+      return this.expenseType === 'Fuel';
+    },
+    min: 0,
+    validate: {
+      validator: function(value) {
+        return this.expenseType !== 'Fuel' || (value > 0);
+      },
+      message: 'Fuel added is required and must be greater than 0 for fuel expenses'
+    }
+  },
+  // Odometer reading at next fueling (for mileage calculation)
+  nextFuelingOdometer: {
+    type: Number,
+    min: 0,
+    comment: 'Odometer reading at next fueling for mileage calculation'
   },
   // Service specific fields
   serviceDescription: {
@@ -103,20 +156,6 @@ const ExpenseSchema = new mongoose.Schema({
     }
   },
   // Other expense fields
-  description: {
-    type: String,
-    required: function() {
-      return this.expenseType === 'Other';
-    },
-    trim: true,
-    maxlength: 500,
-    validate: {
-      validator: function(value) {
-        return this.expenseType !== 'Other' || (value && value.trim().length > 0);
-      },
-      message: 'Description is required for other expenses'
-    }
-  },
   category: {
     type: String,
     enum: [
@@ -149,11 +188,6 @@ const ExpenseSchema = new mongoose.Schema({
     type: String,
     enum: ['Cash', 'Credit Card', 'Debit Card', 'Digital Wallet', 'Bank Transfer', 'Other'],
     default: 'Other'
-  },
-  receiptNumber: {
-    type: String,
-    trim: true,
-    maxlength: 100
   },
   // For trip tracking (if this expense is related to a specific trip)
   trip: {
@@ -201,12 +235,25 @@ ExpenseSchema.virtual('displayInfo').get(function() {
   return info;
 });
 
-// Virtual for fuel efficiency calculation
+// Virtual for fuel efficiency calculation (km per liter)
 ExpenseSchema.virtual('fuelEfficiency').get(function() {
-  if (this.expenseType === 'Fuel' && this.fuelAmount > 0 && this.odometerReading) {
-    // This would need previous odometer reading to calculate accurately
-    // For now, return null to indicate it needs calculation
-    return null;
+  if (this.expenseType === 'Fuel' && this.fuelAdded > 0 && this.nextFuelingOdometer && this.odometerReading) {
+    const distanceTraveled = this.nextFuelingOdometer - this.odometerReading;
+    if (distanceTraveled > 0) {
+      return distanceTraveled / this.fuelAdded; // km per liter
+    }
+  }
+  return null;
+});
+
+// Virtual for mileage display
+ExpenseSchema.virtual('mileageInfo').get(function() {
+  if (this.expenseType === 'Fuel') {
+    const efficiency = this.fuelEfficiency;
+    if (efficiency) {
+      return `${efficiency.toFixed(2)} km/l`;
+    }
+    return 'Mileage calculation pending next fuel entry';
   }
   return null;
 });
@@ -269,6 +316,95 @@ ExpenseSchema.statics.getFuelExpensesForVehicle = async function(vehicleId, limi
   .sort({ date: -1, odometerReading: -1 })
   .limit(limit)
   .populate('vehicle', 'vehicleName company model');
+};
+
+// Static method to calculate and update mileage for fuel expenses
+ExpenseSchema.statics.calculateAndUpdateMileage = async function(vehicleId) {
+  const fuelExpenses = await this.find({
+    vehicle: vehicleId,
+    expenseType: 'Fuel',
+    isActive: true
+  })
+  .sort({ odometerReading: 1 }); // Sort by odometer reading ascending
+
+  const mileageUpdates = [];
+
+  for (let i = 0; i < fuelExpenses.length - 1; i++) {
+    const currentExpense = fuelExpenses[i];
+    const nextExpense = fuelExpenses[i + 1];
+
+    // Calculate distance and fuel used between these two fuelings
+    const distanceTraveled = nextExpense.odometerReading - currentExpense.odometerReading;
+    const fuelUsed = nextExpense.fuelAdded;
+
+    if (distanceTraveled > 0 && fuelUsed > 0) {
+      // Update current expense with next fueling odometer
+      currentExpense.nextFuelingOdometer = nextExpense.odometerReading;
+      await currentExpense.save();
+
+      const mileage = distanceTraveled / fuelUsed; // km per liter
+      mileageUpdates.push({
+        expenseId: currentExpense._id,
+        date: currentExpense.date,
+        odometerStart: currentExpense.odometerReading,
+        odometerEnd: nextExpense.odometerReading,
+        distanceTraveled,
+        fuelUsed,
+        mileage: mileage.toFixed(2)
+      });
+    }
+  }
+
+  return mileageUpdates;
+};
+
+// Static method to get vehicle mileage statistics
+ExpenseSchema.statics.getVehicleMileageStats = async function(vehicleId) {
+  const fuelExpenses = await this.find({
+    vehicle: vehicleId,
+    expenseType: 'Fuel',
+    isActive: true,
+    nextFuelingOdometer: { $exists: true, $gt: 0 }
+  }).populate('vehicle', 'vehicleName company model');
+
+  const mileageData = fuelExpenses.map(expense => {
+    const distance = expense.nextFuelingOdometer - expense.odometerReading;
+    const mileage = distance / expense.fuelAdded;
+
+    return {
+      date: expense.date,
+      odometerStart: expense.odometerReading,
+      odometerEnd: expense.nextFuelingOdometer,
+      distanceTraveled: distance,
+      fuelUsed: expense.fuelAdded,
+      mileage: mileage.toFixed(2)
+    };
+  }).filter(item => item.distanceTraveled > 0 && item.fuelUsed > 0);
+
+  if (mileageData.length === 0) {
+    return {
+      averageMileage: 0,
+      bestMileage: 0,
+      worstMileage: 0,
+      totalDistance: 0,
+      totalFuel: 0,
+      dataPoints: 0
+    };
+  }
+
+  const totalDistance = mileageData.reduce((sum, item) => sum + item.distanceTraveled, 0);
+  const totalFuel = mileageData.reduce((sum, item) => sum + item.fuelUsed, 0);
+  const mileages = mileageData.map(item => parseFloat(item.mileage));
+
+  return {
+    averageMileage: (totalDistance / totalFuel).toFixed(2),
+    bestMileage: Math.max(...mileages).toFixed(2),
+    worstMileage: Math.min(...mileages).toFixed(2),
+    totalDistance,
+    totalFuel,
+    dataPoints: mileageData.length,
+    recentMileage: mileageData.slice(-5) // Last 5 data points
+  };
 };
 
 module.exports = mongoose.model('Expense', ExpenseSchema);

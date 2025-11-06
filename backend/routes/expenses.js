@@ -19,7 +19,9 @@ const {
   updateExpense,
   deleteExpense,
   getVehicleExpenseStats,
-  getFuelExpenses
+  getFuelExpenses,
+  calculateAndUpdateMileage,
+  getVehicleMileageStats
 } = require('../controllers/expenseController');
 
 // Apply authentication middleware to all routes
@@ -72,5 +74,15 @@ router.get('/stats/:vehicleId', statsQueryValidationRules(), validateDateRange, 
 // @desc    Get fuel expenses for efficiency calculations
 // @access  Private
 router.get('/fuel/:vehicleId', fuelEfficiencyValidationRules(), validate, getFuelExpenses);
+
+// @route   POST /api/expenses/calculate-mileage/:vehicleId
+// @desc    Calculate and update mileage for a vehicle
+// @access  Private
+router.post('/calculate-mileage/:vehicleId', mongoIdValidation('vehicleId'), validate, calculateAndUpdateMileage);
+
+// @route   GET /api/expenses/mileage-stats/:vehicleId
+// @desc    Get mileage statistics for a vehicle
+// @access  Private
+router.get('/mileage-stats/:vehicleId', mongoIdValidation('vehicleId'), validate, getVehicleMileageStats);
 
 module.exports = router;

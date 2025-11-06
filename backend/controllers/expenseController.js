@@ -222,6 +222,75 @@ const getFuelExpenses = async (req, res) => {
   }
 };
 
+// @desc    Calculate and update mileage for a vehicle
+// @route   POST /api/expenses/calculate-mileage/:vehicleId
+// @access  Private
+const calculateAndUpdateMileage = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+
+    const mileageUpdates = await expenseService.calculateAndUpdateMileage(
+      req.user.id,
+      vehicleId
+    );
+
+    res.json({
+      success: true,
+      data: mileageUpdates,
+      message: 'Mileage calculations updated successfully'
+    });
+  } catch (error) {
+    console.error('Error calculating mileage:', error);
+
+    if (error.message.includes('Invalid') || error.message.includes('not found')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error while calculating mileage',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
+// @desc    Get mileage statistics for a vehicle
+// @route   GET /api/expenses/mileage-stats/:vehicleId
+// @access  Private
+const getVehicleMileageStats = async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+
+    const mileageStats = await expenseService.getVehicleMileageStats(
+      req.user.id,
+      vehicleId
+    );
+
+    res.json({
+      success: true,
+      data: mileageStats
+    });
+  } catch (error) {
+    console.error('Error fetching mileage stats:', error);
+
+    if (error.message.includes('Invalid') || error.message.includes('not found')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Server error while fetching mileage statistics',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+};
+
 module.exports = {
   getExpenses,
   getExpenseById,
@@ -229,5 +298,7 @@ module.exports = {
   updateExpense,
   deleteExpense,
   getVehicleExpenseStats,
-  getFuelExpenses
+  getFuelExpenses,
+  calculateAndUpdateMileage,
+  getVehicleMileageStats
 };

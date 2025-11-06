@@ -27,13 +27,24 @@ class ExpenseService {
       date: new Date(expenseData.date),
       odometerReading: expenseData.odometerReading ? parseInt(expenseData.odometerReading) : undefined,
       fuelAmount: expenseData.fuelAmount ? parseFloat(expenseData.fuelAmount) : undefined,
-      pricePerUnit: expenseData.pricePerUnit ? parseFloat(expenseData.pricePerUnit) : undefined
+      totalFuel: expenseData.totalFuel ? parseFloat(expenseData.totalFuel) : undefined,
+      totalCost: expenseData.totalCost ? parseFloat(expenseData.totalCost) : undefined,
+      fuelAdded: expenseData.fuelAdded ? parseFloat(expenseData.fuelAdded) : undefined,
+      nextFuelingOdometer: expenseData.nextFuelingOdometer ? parseInt(expenseData.nextFuelingOdometer) : undefined
     });
 
-    await expense.save();
-    await expense.populate('vehicle', 'vehicleName company model vehicleRegistrationNumber');
-
-    return expense;
+    try {
+      await expense.save();
+      await expense.populate('vehicle', 'vehicleName company model vehicleRegistrationNumber');
+      return expense;
+    } catch (saveError) {
+      console.error('Error creating expense:', saveError);
+      if (saveError.name === 'ValidationError') {
+        const errors = Object.values(saveError.errors).map(err => err.message);
+        throw new Error(`Validation failed: ${errors.join(', ')}`);
+      }
+      throw new Error('Failed to create expense');
+    }
   }
 
   /**
@@ -154,17 +165,27 @@ class ExpenseService {
 
     // Update fields
     const allowedFields = [
-      'expenseType', 'amount', 'date', 'odometerReading',
-      'fuelAmount', 'fuelUnit', 'pricePerUnit',
-      'serviceDescription', 'serviceType',
-      'description', 'category',
-      'notes', 'location', 'paymentMethod', 'receiptNumber'
+      'expenseType', 'otherExpenseType', 'amount', 'date', 'description', 'receiptNumber', 'odometerReading',
+      'fuelAmount', 'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer',
+      'serviceDescription', 'serviceType', 'category',
+      'notes', 'location', 'paymentMethod'
     ];
 
     allowedFields.forEach(field => {
       if (updateData[field] !== undefined) {
-        if (field === 'amount' || field === 'odometerReading' || field === 'fuelAmount' || field === 'pricePerUnit') {
-          expense[field] = parseFloat(updateData[field]);
+        if (field === 'odometerReading' || field === 'nextFuelingOdometer') {
+          const parsedValue = parseInt(updateData[field]);
+          if (isNaN(parsedValue)) {
+            throw new Error(`${field} must be a valid integer`);
+          }
+          expense[field] = parsedValue;
+        } else if (field === 'amount' || field === 'fuelAmount' ||
+            field === 'totalFuel' || field === 'totalCost' || field === 'fuelAdded') {
+          const parsedValue = parseFloat(updateData[field]);
+          if (isNaN(parsedValue)) {
+            throw new Error(`${field} must be a valid number`);
+          }
+          expense[field] = parsedValue;
         } else if (field === 'date') {
           expense[field] = new Date(updateData[field]);
         } else {
@@ -173,10 +194,18 @@ class ExpenseService {
       }
     });
 
-    await expense.save();
-    await expense.populate('vehicle', 'vehicleName company model vehicleRegistrationNumber');
-
-    return expense;
+    try {
+      await expense.save();
+      await expense.populate('vehicle', 'vehicleName company model vehicleRegistrationNumber');
+      return expense;
+    } catch (saveError) {
+      console.error('Error updating expense:', saveError);
+      if (saveError.name === 'ValidationError') {
+        const errors = Object.values(saveError.errors).map(err => err.message);
+        throw new Error(`Validation failed: ${errors.join(', ')}`);
+      }
+      throw new Error('Failed to update expense');
+    }
   }
 
   /**
@@ -200,10 +229,14 @@ class ExpenseService {
       throw new Error('Expense not found');
     }
 
-    expense.isActive = false;
-    await expense.save();
-
-    return true;
+    try {
+      expense.isActive = false;
+      await expense.save();
+      return true;
+    } catch (saveError) {
+      console.error('Error soft deleting expense:', saveError);
+      throw new Error('Failed to delete expense');
+    }
   }
 
   /**
@@ -272,7 +305,7 @@ class ExpenseService {
       const previousExpense = fuelExpenses[i + 1];
 
       const distanceTraveled = currentExpense.odometerReading - previousExpense.odometerReading;
-      const fuelUsed = currentExpense.fuelAmount;
+      const fuelUsed = currentExpense.fuelAdded;
 
       if (distanceTraveled > 0 && fuelUsed > 0) {
         const efficiency = distanceTraveled / fuelUsed; // km per liter
@@ -289,6 +322,40 @@ class ExpenseService {
     }
 
     return efficiencyData.sort((a, b) => b.date - a.date);
+  }
+
+  /**
+   * Calculate and update mileage for fuel expenses
+   * @param {string} userId - User ID
+   * @param {string} vehicleId - Vehicle ID
+   * @returns {Promise<Array>} Updated mileage data
+   */
+  async calculateAndUpdateMileage(userId, vehicleId) {
+    if (!mongoose.Types.ObjectId.isValid(vehicleId)) {
+      throw new Error('Invalid vehicle ID format');
+    }
+
+    // Verify vehicle ownership
+    await this.verifyVehicleOwnership(vehicleId, userId);
+
+    return await Expense.calculateAndUpdateMileage(vehicleId);
+  }
+
+  /**
+   * Get vehicle mileage statistics
+   * @param {string} userId - User ID
+   * @param {string} vehicleId - Vehicle ID
+   * @returns {Promise<Object>} Mileage statistics
+   */
+  async getVehicleMileageStats(userId, vehicleId) {
+    if (!mongoose.Types.ObjectId.isValid(vehicleId)) {
+      throw new Error('Invalid vehicle ID format');
+    }
+
+    // Verify vehicle ownership
+    await this.verifyVehicleOwnership(vehicleId, userId);
+
+    return await Expense.getVehicleMileageStats(vehicleId);
   }
 
   /**
@@ -351,7 +418,7 @@ class ExpenseService {
    */
   validateExpenseData(data, isCreate) {
     const requiredFields = isCreate
-      ? ['vehicle', 'expenseType', 'amount', 'date']
+      ? ['vehicle', 'expenseType', 'amount', 'date', 'description', 'odometerReading']
       : [];
 
     for (const field of requiredFields) {
@@ -361,19 +428,39 @@ class ExpenseService {
     }
 
     if (data.amount !== undefined && (isNaN(data.amount) || parseFloat(data.amount) <= 0)) {
-      throw new Error('Amount must be a positive number');
+      throw new Error('Amount must be a positive number (in INR)');
     }
 
     if (data.expenseType && !['Fuel', 'Service', 'Other'].includes(data.expenseType)) {
       throw new Error('Invalid expense type');
     }
 
+    if (data.expenseType === 'Other' && !data.otherExpenseType) {
+      throw new Error('Other expense type specification is required');
+    }
+
     if (data.fuelAmount !== undefined && data.fuelAmount <= 0) {
       throw new Error('Fuel amount must be positive');
     }
 
+    if (data.totalFuel !== undefined && data.totalFuel <= 0) {
+      throw new Error('Total fuel must be positive');
+    }
+
+    if (data.fuelAdded !== undefined && data.fuelAdded <= 0) {
+      throw new Error('Fuel added must be positive');
+    }
+
+    if (data.totalCost !== undefined && data.totalCost <= 0) {
+      throw new Error('Total cost must be positive');
+    }
+
     if (data.odometerReading !== undefined && data.odometerReading < 0) {
       throw new Error('Odometer reading cannot be negative');
+    }
+
+    if (data.nextFuelingOdometer !== undefined && data.nextFuelingOdometer < 0) {
+      throw new Error('Next fueling odometer reading cannot be negative');
     }
   }
 
@@ -386,6 +473,15 @@ class ExpenseService {
       case 'Fuel':
         if (!data.fuelAmount || data.fuelAmount <= 0) {
           throw new Error('Fuel amount is required for fuel expenses');
+        }
+        if (!data.totalFuel || data.totalFuel <= 0) {
+          throw new Error('Total fuel is required for fuel expenses');
+        }
+        if (!data.totalCost || data.totalCost <= 0) {
+          throw new Error('Total cost is required for fuel expenses');
+        }
+        if (!data.fuelAdded || data.fuelAdded <= 0) {
+          throw new Error('Fuel added is required for fuel expenses');
         }
         if (!data.odometerReading || data.odometerReading < 0) {
           throw new Error('Odometer reading is required for fuel expenses');
@@ -402,11 +498,8 @@ class ExpenseService {
         break;
 
       case 'Other':
-        if (!data.description || !data.description.trim()) {
-          throw new Error('Description is required for other expenses');
-        }
-        if (!data.category) {
-          throw new Error('Category is required for other expenses');
+        if (!data.otherExpenseType || !data.otherExpenseType.trim()) {
+          throw new Error('Other expense type specification is required');
         }
         break;
     }

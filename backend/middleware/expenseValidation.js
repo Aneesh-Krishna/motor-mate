@@ -17,12 +17,20 @@ const expenseValidationRules = () => {
       .isIn(['Fuel', 'Service', 'Other'])
       .withMessage('Expense type must be Fuel, Service, or Other'),
 
-    // Amount validation
+    // Other expense type validation (conditional)
+    body('otherExpenseType')
+      .if(body('expenseType').equals('Other'))
+      .notEmpty()
+      .withMessage('Other expense type specification is required')
+      .isLength({ min: 1, max: 100 })
+      .withMessage('Other expense type must be between 1 and 100 characters'),
+
+    // Amount validation (in INR)
     body('amount')
       .notEmpty()
       .withMessage('Amount is required')
       .isFloat({ gt: 0 })
-      .withMessage('Amount must be a positive number'),
+      .withMessage('Amount must be a positive number (in INR)'),
 
     // Date validation
     body('date')
@@ -31,9 +39,23 @@ const expenseValidationRules = () => {
       .isISO8601()
       .withMessage('Date must be a valid date'),
 
-    // Odometer reading validation
-    body('odometerReading')
+    // Description validation (now required for all types)
+    body('description')
+      .notEmpty()
+      .withMessage('Description is required')
+      .isLength({ min: 1, max: 500 })
+      .withMessage('Description must be between 1 and 500 characters'),
+
+    // Receipt number validation (optional)
+    body('receiptNumber')
       .optional()
+      .isLength({ max: 100 })
+      .withMessage('Receipt number cannot exceed 100 characters'),
+
+    // Odometer reading validation (now required for all types)
+    body('odometerReading')
+      .notEmpty()
+      .withMessage('Odometer reading is required')
       .isInt({ min: 0 })
       .withMessage('Odometer reading must be a non-negative integer'),
 
@@ -45,15 +67,39 @@ const expenseValidationRules = () => {
       .isFloat({ gt: 0 })
       .withMessage('Fuel amount must be a positive number'),
 
-    body('fuelUnit')
+    body('totalFuel')
       .if(body('expenseType').equals('Fuel'))
-      .isIn(['liters', 'gallons'])
-      .withMessage('Fuel unit must be liters or gallons'),
+      .notEmpty()
+      .withMessage('Total fuel is required for fuel expenses')
+      .isFloat({ gt: 0 })
+      .withMessage('Total fuel must be a positive number'),
 
-    body('pricePerUnit')
-      .optional()
-      .isFloat({ min: 0 })
-      .withMessage('Price per unit must be a non-negative number'),
+    body('totalCost')
+      .if(body('expenseType').equals('Fuel'))
+      .notEmpty()
+      .withMessage('Total cost is required for fuel expenses')
+      .isFloat({ gt: 0 })
+      .withMessage('Total cost must be a positive number (in INR)'),
+
+    body('fuelAdded')
+      .if(body('expenseType').equals('Fuel'))
+      .notEmpty()
+      .withMessage('Fuel added is required for fuel expenses')
+      .isFloat({ gt: 0 })
+      .withMessage('Fuel added must be a positive number'),
+
+    body('nextFuelingOdometer')
+      .optional({ values: 'falsy' })
+      .custom((value) => {
+        if (value === '' || value === null || value === undefined) {
+          return true; // Allow empty values
+        }
+        const num = parseInt(value);
+        if (isNaN(num) || num < 0) {
+          throw new Error('Next fueling odometer must be a non-negative integer');
+        }
+        return true;
+      }),
 
     // Service-specific validations (conditional)
     body('serviceDescription')
@@ -80,28 +126,30 @@ const expenseValidationRules = () => {
       ])
       .withMessage('Invalid service type'),
 
-    // Other expense validations (conditional)
-    body('description')
-      .if(body('expenseType').equals('Other'))
+    // Service-specific validations (conditional)
+    body('serviceDescription')
+      .if(body('expenseType').equals('Service'))
       .notEmpty()
-      .withMessage('Description is required for other expenses')
+      .withMessage('Service description is required for service expenses')
       .isLength({ min: 1, max: 500 })
-      .withMessage('Description must be between 1 and 500 characters'),
+      .withMessage('Service description must be between 1 and 500 characters'),
 
-    body('category')
-      .if(body('expenseType').equals('Other'))
+    body('serviceType')
+      .if(body('expenseType').equals('Service'))
       .isIn([
-        'Parking',
-        'Toll',
-        'Car Wash',
-        'Insurance',
-        'Registration',
-        'Tax',
-        'Fine',
-        'Accessories',
+        'Oil Change',
+        'Tire Service',
+        'Brake Service',
+        'Engine Service',
+        'Transmission Service',
+        'Battery Service',
+        'AC Service',
+        'General Maintenance',
+        'Repair',
+        'Inspection',
         'Other'
       ])
-      .withMessage('Invalid category'),
+      .withMessage('Invalid service type'),
 
     // Optional fields validation
     body('notes')
