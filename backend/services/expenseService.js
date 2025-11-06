@@ -439,20 +439,19 @@ class ExpenseService {
       throw new Error('Other expense type specification is required');
     }
 
-    if (data.fuelAmount !== undefined && data.fuelAmount <= 0) {
-      throw new Error('Fuel amount must be positive');
-    }
+    // Fuel-specific validations - only apply to fuel expenses
+    if (data.expenseType === 'Fuel') {
+      if (data.totalFuel !== undefined && data.totalFuel <= 0) {
+        throw new Error('Total fuel must be positive');
+      }
 
-    if (data.totalFuel !== undefined && data.totalFuel <= 0) {
-      throw new Error('Total fuel must be positive');
-    }
+      if (data.fuelAdded !== undefined && data.fuelAdded <= 0) {
+        throw new Error('Fuel added must be positive');
+      }
 
-    if (data.fuelAdded !== undefined && data.fuelAdded <= 0) {
-      throw new Error('Fuel added must be positive');
-    }
-
-    if (data.totalCost !== undefined && data.totalCost <= 0) {
-      throw new Error('Total cost must be positive');
+      if (data.totalCost !== undefined && data.totalCost <= 0) {
+        throw new Error('Total cost must be positive');
+      }
     }
 
     if (data.odometerReading !== undefined && data.odometerReading < 0) {

@@ -2062,8 +2062,13 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
-      newErrors.amount = 'Amount must be greater than 0 (INR)';
+    const currentExpenseType = expense?.expenseType || expenseType;
+
+    // Amount validation - different for fuel vs other expenses
+    if (currentExpenseType !== 'Fuel') {
+      if (!formData.amount || parseFloat(formData.amount) <= 0) {
+        newErrors.amount = 'Amount must be greater than 0 (INR)';
+      }
     }
 
     if (!formData.date) {
@@ -2082,18 +2087,17 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
       newErrors.odometerReading = 'Odometer reading is required';
     }
 
-    const currentExpenseType = expense?.expenseType || expenseType;
-
     if (currentExpenseType === 'Fuel') {
       if (!formData.fuelAdded || parseFloat(formData.fuelAdded) <= 0) {
         newErrors.fuelAdded = 'Fuel added must be greater than 0';
       }
       if (!formData.totalFuel || parseFloat(formData.totalFuel) <= 0) {
-        newErrors.totalFuel = 'Total fuel must be greater than 0';
+        newErrors.totalFuel = 'Tank capacity must be greater than 0';
       }
       if (!formData.totalCost || parseFloat(formData.totalCost) <= 0) {
-        newErrors.totalCost = 'Total cost must be greater than 0';
+        newErrors.totalCost = 'Total amount must be greater than 0';
       }
+      // nextFuelingOdometer is optional, no validation needed
     }
 
     if (currentExpenseType === 'Service') {
@@ -2167,12 +2171,22 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
       cleanedFormData.vehicle = cleanedFormData.vehicle._id || cleanedFormData.vehicle.id;
     }
 
-    // Convert numeric fields
-    ['amount', 'odometerReading', 'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer'].forEach(field => {
-      if (cleanedFormData[field]) {
-        cleanedFormData[field] = parseFloat(cleanedFormData[field]);
-      }
-    });
+    // Convert numeric fields - only convert relevant fields based on expense type
+    if (currentExpenseType === 'Fuel') {
+      // Convert all fuel-related numeric fields
+      ['amount', 'odometerReading', 'totalFuel', 'totalCost', 'fuelAdded', 'nextFuelingOdometer'].forEach(field => {
+        if (cleanedFormData[field]) {
+          cleanedFormData[field] = parseFloat(cleanedFormData[field]);
+        }
+      });
+    } else {
+      // Only convert common numeric fields for non-fuel expenses
+      ['amount', 'odometerReading'].forEach(field => {
+        if (cleanedFormData[field]) {
+          cleanedFormData[field] = parseFloat(cleanedFormData[field]);
+        }
+      });
+    }
 
     // Only include relevant fields based on expense type
     const submissionData = {
@@ -2189,10 +2203,12 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
     };
 
     if (currentExpenseType === 'Fuel') {
+      // For fuel expenses, set amount to totalCost for backward compatibility
+      submissionData.amount = cleanedFormData.totalCost;
       submissionData.totalFuel = cleanedFormData.totalFuel;
       submissionData.totalCost = cleanedFormData.totalCost;
       submissionData.fuelAdded = cleanedFormData.fuelAdded;
-      submissionData.nextFuelingOdometer = cleanedFormData.nextFuelingOdometer;
+      submissionData.nextFuelingOdometer = cleanedFormData.nextFuelingOdometer || undefined;
     } else if (currentExpenseType === 'Service') {
       submissionData.serviceDescription = cleanedFormData.serviceDescription;
       submissionData.serviceType = cleanedFormData.serviceType;
@@ -2305,7 +2321,8 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
       )}
 
       {/* Common Fields */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
+      {/* Amount field - only show for non-fuel expenses */}
+      {(expense?.expenseType || formData.expenseType) !== 'Fuel' && (
         <div>
           <label style={{
             display: 'block',
@@ -2337,7 +2354,10 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
             </div>
           )}
         </div>
+      )}
 
+      {/* For fuel expenses, show Total Amount instead of regular Amount */}
+      {(expense?.expenseType || formData.expenseType) === 'Fuel' && (
         <div>
           <label style={{
             display: 'block',
@@ -2346,28 +2366,61 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
             color: '#374151',
             marginBottom: '0.5rem'
           }}>
-            Date <span style={{ color: '#ef4444' }}>*</span>
+            Total Amount (INR) <span style={{ color: '#ef4444' }}>*</span>
           </label>
           <input
-            type="date"
-            name="date"
-            value={formData.date}
+            type="number"
+            name="totalCost"
+            value={formData.totalCost}
             onChange={handleInputChange}
-            max={new Date().toISOString().split('T')[0]}
+            step="0.01"
+            placeholder="0.00"
             style={{
               width: '100%',
               padding: '0.75rem',
-              border: `1px solid ${errors.date ? '#ef4444' : '#d1d5db'}`,
+              border: `1px solid ${errors.totalCost ? '#ef4444' : '#d1d5db'}`,
               borderRadius: '0.5rem',
               fontSize: '1rem'
             }}
           />
-          {errors.date && (
+          {errors.totalCost && (
             <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-              {errors.date}
+              {errors.totalCost}
             </div>
           )}
         </div>
+      )}
+
+      {/* Date field - for all expenses */}
+      <div>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Date <span style={{ color: '#ef4444' }}>*</span>
+        </label>
+        <input
+          type="date"
+          name="date"
+          value={formData.date}
+          onChange={handleInputChange}
+          max={new Date().toISOString().split('T')[0]}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: `1px solid ${errors.date ? '#ef4444' : '#d1d5db'}`,
+            borderRadius: '0.5rem',
+            fontSize: '1rem'
+          }}
+        />
+        {errors.date && (
+          <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            {errors.date}
+          </div>
+        )}
       </div>
 
       {/* Description and Odometer - required for all types */}
@@ -2516,7 +2569,7 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
                 color: '#374151',
                 marginBottom: '0.5rem'
               }}>
-                Total Fuel (liters) <span style={{ color: '#ef4444' }}>*</span>
+                Tank Capacity (liters) <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="number"
@@ -2524,7 +2577,7 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
                 value={formData.totalFuel}
                 onChange={handleInputChange}
                 step="0.01"
-                placeholder="0.00"
+                placeholder="Total tank capacity"
                 style={{
                   width: '100%',
                   padding: '0.75rem',
@@ -2538,42 +2591,11 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
                   {errors.totalFuel}
                 </div>
               )}
+              <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                Total fuel tank capacity
+              </div>
             </div>
 
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '0.875rem',
-                fontWeight: '500',
-                color: '#374151',
-                marginBottom: '0.5rem'
-              }}>
-                Total Cost (INR) <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="number"
-                name="totalCost"
-                value={formData.totalCost}
-                onChange={handleInputChange}
-                step="0.01"
-                placeholder="0.00"
-                style={{
-                  width: '100%',
-                  padding: '0.75rem',
-                  border: `1px solid ${errors.totalCost ? '#ef4444' : '#d1d5db'}`,
-                  borderRadius: '0.5rem',
-                  fontSize: '1rem'
-                }}
-              />
-              {errors.totalCost && (
-                <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                  {errors.totalCost}
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
             <div>
               <label style={{
                 display: 'block',
@@ -2608,7 +2630,9 @@ const ExpenseForm = ({ vehicle, expense, expenseType, onSuccess, onClose, userVe
                 Amount of fuel added during this fueling
               </div>
             </div>
+          </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem' }}>
             <div>
               <label style={{
                 display: 'block',
