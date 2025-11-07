@@ -1,10 +1,76 @@
-import React from 'react';
-import { useSelector } from 'react-redux';
+import React, { useEffect, useState } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
 import { selectSelectedVehicle } from '../ducks/Vehicle.duck';
+import { selectExpenses, selectMileageStats, selectExpensesLoading } from '../ducks/Expense.duck';
+import { fetchExpenses, fetchMileageStats } from '../ducks/Expense.duck';
+import ExpenseForm from './ExpenseForm';
 import './VehicleDetails.css';
 
-const VehicleDetails = ({ onEdit, onDelete, onQuickAction }) => {
+const VehicleDetails = ({ onEdit, onDelete, onQuickAction, onRefreshExpenseData }) => {
   const vehicle = useSelector(selectSelectedVehicle);
+  const expenses = useSelector(selectExpenses);
+  const mileageStats = useSelector(selectMileageStats);
+  const expensesLoading = useSelector(selectExpensesLoading);
+  const dispatch = useDispatch();
+  const [showExpenseForm, setShowExpenseForm] = useState(false);
+  const [expenseFormType, setExpenseFormType] = useState(null);
+
+  // Fetch expenses when vehicle changes
+  useEffect(() => {
+    if (vehicle) {
+      dispatch(fetchExpenses({ vehicleId: vehicle._id, limit: 10 }));
+      dispatch(fetchMileageStats(vehicle._id));
+    }
+  }, [vehicle, dispatch]);
+
+  // Calculate total expenses and breakdown from frontend data
+  const calculateExpensesSummary = (expensesData) => {
+    if (!expensesData || expensesData.length === 0) {
+      return {
+        totalExpenses: 0,
+        expenseBreakdown: []
+      };
+    }
+
+    const summary = expensesData.reduce((acc, expense) => {
+      const amount = expense.amount || 0;
+      const type = expense.expenseType || 'Other';
+
+      // Add to total
+      acc.totalExpenses += amount;
+
+      // Add to type breakdown
+      if (!acc.expenseBreakdown[type]) {
+        acc.expenseBreakdown[type] = {
+          type,
+          total: 0,
+          count: 0,
+          average: 0
+        };
+      }
+
+      acc.expenseBreakdown[type].total += amount;
+      acc.expenseBreakdown[type].count += 1;
+      acc.expenseBreakdown[type].average = acc.expenseBreakdown[type].total / acc.expenseBreakdown[type].count;
+
+      return acc;
+    }, {
+      totalExpenses: 0,
+      expenseBreakdown: {}
+    });
+
+    // Convert expenseBreakdown object to array
+    summary.expenseBreakdown = Object.values(summary.expenseBreakdown);
+
+    return summary;
+  };
+
+  const frontendCalculatedStats = calculateExpensesSummary(expenses);
+
+  // Use backend stats if available, otherwise use frontend calculated stats
+  const displayStats = mileageStats || frontendCalculatedStats;
+  const totalExpenses = displayStats.totalExpenses || 0;
+  const expenseBreakdown = displayStats.expenseBreakdown || [];
 
   if (!vehicle) {
     return (
@@ -35,6 +101,31 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction }) => {
   const handleDeleteClick = () => {
     if (onDelete && window.confirm(`Are you sure you want to delete "${vehicle.vehicleName}"? This action cannot be undone and will remove all associated expenses and service history.`)) {
       onDelete(vehicle._id);
+    }
+  };
+
+  const handleExpenseFormOpen = (type) => {
+    setExpenseFormType(type);
+    setShowExpenseForm(true);
+  };
+
+  const handleExpenseFormClose = () => {
+    setShowExpenseForm(false);
+    setExpenseFormType(null);
+  };
+
+  const handleExpenseFormSuccess = () => {
+    console.log('Expense form success callback triggered');
+    // Refresh expense data after successful create/update
+    if (vehicle) {
+      console.log('Refreshing expenses for vehicle:', vehicle._id);
+      dispatch(fetchExpenses({ vehicleId: vehicle._id, limit: 10 }));
+      dispatch(fetchMileageStats(vehicle._id));
+    }
+    // Also call the parent refresh function if available
+    if (onRefreshExpenseData) {
+      console.log('Calling parent refresh function');
+      onRefreshExpenseData();
     }
   };
 
@@ -132,10 +223,94 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction }) => {
           </div>
         </div>
 
+        {/* Expenses Section */}
+        <div className="detail-section">
+          <h3>⛽ Recent Expenses</h3>
+
+          
+          {/* Total Expenses Summary */}
+          <div className="total-expenses-summary">
+            <div className="total-label">Total Expenses</div>
+            <div className="total-amount">₹{totalExpenses.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          </div>
+
+          {/* Expense Breakdown */}
+          {expenseBreakdown && expenseBreakdown.length > 0 && (
+            <div className="expense-breakdown">
+              <h4>Expense Breakdown</h4>
+              <div className="breakdown-items">
+                {expenseBreakdown.map((item, index) => (
+                  <div key={index} className="breakdown-item">
+                    <div className="breakdown-type">
+                      <span className="type-icon">
+                        {item.type === 'Fuel' && '⛽'}
+                        {item.type === 'Service' && '🔧'}
+                        {item.type === 'Other' && '📝'}
+                      </span>
+                      {item.type}
+                    </div>
+                    <div className="breakdown-details">
+                      <div className="breakdown-amount">₹{item.total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                      <div className="breakdown-count">{item.count} transaction{item.count !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {expensesLoading ? (
+            <div className="loading-small">Loading expenses...</div>
+          ) : expenses && expenses.length > 0 ? (
+            <div className="recent-expenses">
+              {expenses.slice(0, 5).map((expense) => (
+                <div key={expense._id} className="expense-item">
+                  <div className="expense-type">{expense.expenseType}</div>
+                  <div className="expense-amount">₹{expense.amount?.toFixed(2)}</div>
+                  <div className="expense-date">{new Date(expense.date).toLocaleDateString()}</div>
+                  {expense.expenseType === 'Fuel' && expense.mileage && (
+                    <div className="expense-mileage">{expense.mileage.toFixed(2)} km/l</div>
+                  )}
+                  {expense.expenseType === 'Fuel' && expense.odometerReading && (
+                    <div className="expense-odometer">{expense.odometerReading.toLocaleString()} km</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="no-expenses">No expenses recorded yet</div>
+          )}
+        </div>
+
+        {/* Mileage Stats Section */}
+        {mileageStats && (
+          <div className="detail-section">
+            <h3>📊 Mileage Statistics</h3>
+            <div className="mileage-stats">
+              <div className="stat-item">
+                <div className="stat-label">Average Mileage</div>
+                <div className="stat-value">{mileageStats.averageMileage} km/l</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-label">Best Mileage</div>
+                <div className="stat-value">{mileageStats.bestMileage} km/l</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-label">Total Distance</div>
+                <div className="stat-value">{mileageStats.totalDistance?.toLocaleString()} km</div>
+              </div>
+              <div className="stat-item">
+                <div className="stat-label">Data Points</div>
+                <div className="stat-value">{mileageStats.dataPoints}</div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="detail-section">
           <h3>🚀 Quick Actions</h3>
           <div className="quick-actions">
-            <div className="quick-action-card" onClick={() => onQuickAction && onQuickAction('fuel')}>
+            <div className="quick-action-card" onClick={() => handleExpenseFormOpen('Fuel')}>
               <div className="action-icon">⛽</div>
               <div className="action-content">
                 <h4>Log Fuel</h4>
@@ -143,7 +318,7 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction }) => {
               </div>
               <div className="action-arrow">→</div>
             </div>
-            <div className="quick-action-card" onClick={() => onQuickAction && onQuickAction('service')}>
+            <div className="quick-action-card" onClick={() => handleExpenseFormOpen('Service')}>
               <div className="action-icon">🔧</div>
               <div className="action-content">
                 <h4>Log Service</h4>
@@ -151,7 +326,7 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction }) => {
               </div>
               <div className="action-arrow">→</div>
             </div>
-            <div className="quick-action-card" onClick={() => onQuickAction && onQuickAction('expense')}>
+            <div className="quick-action-card" onClick={() => handleExpenseFormOpen('Other')}>
               <div className="action-icon">📝</div>
               <div className="action-content">
                 <h4>Log Expense</h4>
@@ -169,6 +344,16 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction }) => {
             </div>
           </div>
         </div>
+
+        {/* Expense Form Modal */}
+        {showExpenseForm && (
+          <ExpenseForm
+            vehicle={vehicle}
+            expense={{ expenseType: expenseFormType }}
+            onClose={handleExpenseFormClose}
+            onSuccess={handleExpenseFormSuccess}
+          />
+        )}
       </div>
     </div>
   );

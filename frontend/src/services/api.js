@@ -112,7 +112,59 @@ export const authAPI = {
   }),
 };
 
+// API methods for expenses
+export const expensesAPI = {
+  // Get all expenses for a user
+  getExpenses: (filters = {}) => {
+    const queryString = new URLSearchParams(filters).toString();
+    return apiRequest(`/expenses${queryString ? '?' + queryString : ''}`);
+  },
+
+  // Get single expense by ID
+  getExpense: (id) => apiRequest(`/expenses/${id}`),
+
+  // Create new expense
+  createExpense: (expenseData) => apiRequest('/expenses', {
+    method: 'POST',
+    body: JSON.stringify(expenseData),
+  }),
+
+  // Update expense
+  updateExpense: (id, expenseData) => apiRequest(`/expenses/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(expenseData),
+  }),
+
+  // Delete expense
+  deleteExpense: (id) => apiRequest(`/expenses/${id}`, {
+    method: 'DELETE',
+  }),
+
+  // Get fuel expenses for mileage calculations
+  getFuelExpenses: (vehicleId, limit = 50) =>
+    apiRequest(`/expenses/fuel/${vehicleId}?limit=${limit}`),
+
+  // Calculate and update mileage for a vehicle
+  calculateMileage: (vehicleId) =>
+    apiRequest(`/expenses/calculate-mileage/${vehicleId}`, {
+      method: 'POST',
+    }),
+
+  // Get vehicle mileage statistics
+  getMileageStats: (vehicleId) =>
+    apiRequest(`/expenses/mileage-stats/${vehicleId}`),
+
+  // Get vehicle expense statistics
+  getExpenseStats: (vehicleId, startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return apiRequest(`/expenses/stats/${vehicleId}${params.toString() ? '?' + params.toString() : ''}`);
+  }
+};
+
 export default {
   vehicles: vehiclesAPI,
   auth: authAPI,
+  expenses: expensesAPI,
 };
