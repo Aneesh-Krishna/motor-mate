@@ -9,6 +9,7 @@ import {
   selectDeletingVehicle,
   deleteVehicle
 } from '../ducks/Vehicle.duck';
+import { fetchExpenses, fetchMileageStats } from '../ducks/Expense.duck';
 import VehicleList from '../components/VehicleList';
 import VehicleDetails from '../components/VehicleDetails';
 import VehicleForm from '../components/VehicleForm';
@@ -103,6 +104,13 @@ const Dashboard = () => {
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
+  };
+
+  const refreshExpenseData = () => {
+    if (selectedVehicle) {
+      dispatch(fetchExpenses({ vehicleId: selectedVehicle._id, limit: 10 }));
+      dispatch(fetchMileageStats(selectedVehicle._id));
+    }
   };
 
   const currentVehicle = selectedVehicle;
@@ -205,6 +213,7 @@ const Dashboard = () => {
                   onEdit={handleEditVehicle}
                   onDelete={handleDeleteVehicle}
                   onQuickAction={handleQuickAction}
+                  onRefreshExpenseData={refreshExpenseData}
                 />
               ) : (
                 <div className="empty-vehicle-selection">

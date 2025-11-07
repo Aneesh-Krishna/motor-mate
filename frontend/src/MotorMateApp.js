@@ -1244,7 +1244,7 @@ const DashboardPage = () => {
                         <div key={index} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>{item.type}:</span>
                           <span style={{ fontSize: '0.875rem', fontWeight: '500', color: '#111827' }}>
-                            ₹${item.total?.toFixed(2) || '0.00'} ({item.count || 0})
+                            ₹{item.total?.toFixed(2) || '0.00'} ({item.count || 0})
                           </span>
                         </div>
                       ))}
