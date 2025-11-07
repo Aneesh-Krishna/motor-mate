@@ -4,6 +4,7 @@ import loginReducer from '../ducks/Login.duck';
 import registerReducer from '../ducks/Register.duck';
 import dashboardReducer from '../ducks/Dashboard.duck';
 import vehicleReducer from '../ducks/Vehicle.duck';
+import expenseReducer from '../ducks/Expense.duck';
 
 const store = configureStore({
   reducer: {
@@ -12,6 +13,7 @@ const store = configureStore({
     register: registerReducer,
     dashboard: dashboardReducer,
     vehicles: vehicleReducer,
+    expense: expenseReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

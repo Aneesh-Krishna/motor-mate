@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { ObjectId } = mongoose.Types;
 
 const ExpenseSchema = new mongoose.Schema({
   user: {
@@ -264,45 +265,56 @@ ExpenseSchema.set('toObject', { virtuals: true });
 
 // Static method to get expense statistics for a vehicle
 ExpenseSchema.statics.getVehicleExpenseStats = async function(vehicleId, startDate, endDate) {
-  const matchCondition = {
-    vehicle: vehicleId,
-    isActive: true
-  };
+  try {
+    console.log('Getting stats for vehicleId:', vehicleId);
 
-  if (startDate && endDate) {
-    matchCondition.date = {
-      $gte: startDate,
-      $lte: endDate
-    };
-  }
+    // First, let's just try to find expenses for this vehicle
+    const expenses = await this.find({
+      vehicle: vehicleId,
+      isActive: true
+    }).lean();
 
-  const stats = await this.aggregate([
-    { $match: matchCondition },
-    {
-      $group: {
-        _id: '$expenseType',
-        totalAmount: { $sum: '$amount' },
-        count: { $sum: 1 },
-        avgAmount: { $avg: '$amount' }
-      }
-    },
-    {
-      $group: {
-        _id: null,
-        totalExpenses: { $sum: '$amount' },
-        expenseBreakdown: {
-          $push: {
-            type: '$_id',
-            total: '$totalAmount',
-            count: '$count',
-            average: '$avgAmount'
-          }
-        }
-      }
+    console.log('Found expenses:', expenses.length);
+
+    if (expenses.length === 0) {
+      return { totalExpenses: 0, expenseBreakdown: [] };
     }
-  ]);
 
-  return stats[0] || { totalExpenses: 0, expenseBreakdown: [] };
+    // Calculate stats manually from the found expenses
+    const totalExpenses = expenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+
+    const breakdownByType = {};
+    expenses.forEach(exp => {
+      const type = exp.expenseType || 'Other';
+      const amount = exp.amount || 0;
+
+      if (!breakdownByType[type]) {
+        breakdownByType[type] = { total: 0, count: 0 };
+      }
+
+      breakdownByType[type].total += amount;
+      breakdownByType[type].count += 1;
+    });
+
+    const expenseBreakdown = Object.entries(breakdownByType).map(([type, data]) => ({
+      type,
+      total: data.total,
+      count: data.count,
+      average: data.total / data.count
+    }));
+
+    const result = {
+      totalExpenses,
+      expenseBreakdown
+    };
+
+    console.log('Calculated stats result:', result);
+    return result;
+
+  } catch (error) {
+    console.error('Error in getVehicleExpenseStats:', error);
+    return { totalExpenses: 0, expenseBreakdown: [] };
+  }
 };
 
 // Static method to get fuel expenses for efficiency calculations
