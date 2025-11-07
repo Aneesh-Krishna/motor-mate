@@ -30,7 +30,7 @@ const Login = () => {
   const onGoogleLogin = async () => {
     const result = await dispatch(loginWithGoogle());
     if (result.payload?.success) {
-      console.log('Welcome to Motorist App! Thanks for signing in with Google.');
+      console.log('Welcome to MotorMate! Thanks for signing in with Google.');
     }
   };
 
@@ -38,11 +38,11 @@ const Login = () => {
     <div className="auth-container">
       <div className="auth-card">
         <div className="auth-header">
-          <h1 className="auth-title">🚗 Motorist App</h1>
+          <h1 className="auth-title">🚗 MotorMate</h1>
           <p className="auth-subtitle">Track your vehicle expenses with ease</p>
         </div>
 
-        <h2>Sign In to Motorist App</h2>
+        <h2>Sign In to MotorMate</h2>
         <p className="auth-subtitle">Track your vehicle expenses with ease</p>
 
         {error && <div className="error-message">{error}</div>}
@@ -62,7 +62,7 @@ const Login = () => {
         </div>
 
         <p className="auth-notice">
-          <small>Motorist App uses Google authentication for secure and easy access to your account.</small>
+          <small>MotorMate uses Google authentication for secure and easy access to your account.</small>
         </p>
       </div>
     </div>
