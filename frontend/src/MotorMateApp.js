@@ -511,6 +511,14 @@ const DashboardPage = () => {
   const [expenseStats, setExpenseStats] = useState(null);
   const [expensesLoading, setExpensesLoading] = useState(false);
 
+  // Trip management state
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [showTripsList, setShowTripsList] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
+  const [trips, setTrips] = useState([]);
+  const [tripStats, setTripStats] = useState(null);
+  const [tripsLoading, setTripsLoading] = useState(false);
+
   // API call function
   const apiCall = async (endpoint, options = {}) => {
     const token = localStorage.getItem('token');
@@ -553,14 +561,18 @@ const DashboardPage = () => {
     fetchVehicles();
   }, []);
 
-  // Load expenses and stats when vehicle is selected
+  // Load expenses, trips, and stats when vehicle is selected
   React.useEffect(() => {
     if (selectedVehicle) {
       fetchExpenses(selectedVehicle._id);
       fetchExpenseStats(selectedVehicle._id);
+      fetchTrips(selectedVehicle._id);
+      fetchTripStats(selectedVehicle._id);
     } else {
       setExpenses([]);
       setExpenseStats(null);
+      setTrips([]);
+      setTripStats(null);
     }
   }, [selectedVehicle]);
 
@@ -780,6 +792,10 @@ const DashboardPage = () => {
         setEditingExpense(null);
         setShowExpenseModal(true);
         break;
+      case 'Log Trip':
+        setEditingTrip(null);
+        setShowTripModal(true);
+        break;
       default:
         setSuccessMessage(`${action} functionality would be implemented here`);
         setTimeout(() => setSuccessMessage(''), 3000);
@@ -870,6 +886,116 @@ const DashboardPage = () => {
     // Use setTimeout to ensure view modal is closed before opening edit modal
     setTimeout(() => {
       setShowExpenseModal(true);
+    }, 100);
+  };
+
+  // Trip-related functions
+  const fetchTrips = async (vehicleId = null) => {
+    try {
+      setTripsLoading(true);
+      const endpoint = vehicleId ? `/trips?vehicle=${vehicleId}` : '/trips';
+      const response = await apiCall(endpoint);
+      setTrips(response.data || []);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      setErrorMessage('Failed to fetch trips: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  const fetchTripStats = async (vehicleId) => {
+    try {
+      const response = await apiCall(`/trips/stats/${vehicleId}`);
+      setTripStats(response.data);
+    } catch (error) {
+      console.error('Error fetching trip stats:', error);
+      setTripStats(null);
+    }
+  };
+
+  const handleTripSubmit = async (tripData) => {
+    try {
+      setTripsLoading(true);
+
+      if (editingTrip) {
+        // Update existing trip
+        const response = await apiCall(`/trips/${editingTrip._id}`, {
+          method: 'PUT',
+          body: JSON.stringify(tripData)
+        });
+
+        const updatedTrips = trips.map(t =>
+          t._id === editingTrip._id ? response.data : t
+        );
+        setTrips(updatedTrips);
+        setSuccessMessage('Trip updated successfully!');
+      } else {
+        // Add new trip
+        const response = await apiCall('/trips', {
+          method: 'POST',
+          body: JSON.stringify(tripData)
+        });
+
+        setTrips([response.data, ...trips]);
+        setSuccessMessage('Trip added successfully!');
+      }
+
+      setShowTripModal(false);
+      setEditingTrip(null);
+
+      // Refresh stats
+      if (selectedVehicle) {
+        fetchTripStats(selectedVehicle._id);
+      }
+
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error('Error saving trip:', error);
+      setErrorMessage('Failed to save trip: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = async (tripId) => {
+    if (window.confirm('Are you sure you want to delete this trip?')) {
+      try {
+        setTripsLoading(true);
+        await apiCall(`/trips/${tripId}`, {
+          method: 'DELETE'
+        });
+
+        const updatedTrips = trips.filter(t => t._id !== tripId);
+        setTrips(updatedTrips);
+        setSuccessMessage('Trip deleted successfully!');
+
+        // Refresh stats
+        if (selectedVehicle) {
+          fetchTripStats(selectedVehicle._id);
+        }
+
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (error) {
+        console.error('Error deleting trip:', error);
+        setErrorMessage('Failed to delete trip: ' + error.message);
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        setTripsLoading(false);
+      }
+    }
+  };
+
+  const handleEditTrip = (trip) => {
+    // Close the list modal first
+    setShowTripsList(false);
+    // Then set up the edit modal
+    setEditingTrip(trip);
+    // Use setTimeout to ensure list modal is closed before opening edit modal
+    setTimeout(() => {
+      setShowTripModal(true);
     }, 100);
   };
 
@@ -1387,6 +1513,64 @@ const DashboardPage = () => {
                   </button>
                 </div>
 
+                {/* Trip Statistics Card */}
+                <div className="info-card">
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
+                    Trip Summary
+                  </h3>
+                  {tripStats ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Trips:</span>
+                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
+                          {tripStats.totalTrips || 0}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Distance:</span>
+                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
+                          {(tripStats.totalDistance || 0).toLocaleString()} km
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Cost:</span>
+                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
+                          ₹{(tripStats.totalCost || 0).toLocaleString()}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Average Distance:</span>
+                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
+                          {tripStats.totalTrips > 0 ? (tripStats.totalDistance / tripStats.totalTrips).toFixed(1) : 0} km
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '1rem', color: '#6b7280' }}>
+                      <div>No trip data available</div>
+                    </div>
+                  )}
+                  <button
+                    onClick={() => setShowTripsList(true)}
+                    style={{
+                      width: '100%',
+                      marginTop: '1rem',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '0.5rem',
+                      fontWeight: '500',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'background-color 150ms ease-in-out'
+                    }}
+                    onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
+                    onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
+                  >
+                    View All Trips
+                  </button>
+                </div>
+
                 {/* Quick Actions Card */}
                 <div className="info-card">
                   <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
@@ -1475,6 +1659,34 @@ const DashboardPage = () => {
                       <div style={{ textAlign: 'left' }}>
                         <div style={{ fontWeight: '500', color: '#111827' }}>Log Expense</div>
                         <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>Track other costs</div>
+                      </div>
+                    </button>
+
+                    <button
+                      onClick={() => handleQuickAction('Log Trip')}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        width: '100%',
+                        padding: '0.75rem',
+                        backgroundColor: '#e0e7ff',
+                        border: 'none',
+                        borderRadius: '0.5rem',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#c7d2fe'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#e0e7ff'}
+                    >
+                      <div style={{ backgroundColor: '#6366f1', padding: '0.5rem', borderRadius: '0.375rem' }}>
+                        <svg className="w-5 h-5" style={{ color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                        </svg>
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '500', color: '#111827' }}>Log Trip</div>
+                        <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>Record a journey</div>
                       </div>
                     </button>
                   </div>
@@ -2198,6 +2410,238 @@ const DashboardPage = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Trip Form Modal */}
+      {showTripModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100
+          }}
+          onClick={() => {
+            setShowTripModal(false);
+            setEditingTrip(null);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '1rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              padding: '2rem',
+              width: '90%',
+              maxWidth: '600px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              style={{
+                position: 'absolute',
+                top: '1rem',
+                right: '1rem',
+                background: 'none',
+                border: 'none',
+                fontSize: '1.5rem',
+                cursor: 'pointer',
+                color: '#6b7280'
+              }}
+              onClick={() => {
+                setShowTripModal(false);
+                setEditingTrip(null);
+              }}
+            >
+              ×
+            </button>
+
+            <h2 style={{ marginBottom: '1.5rem', color: '#1f2937' }}>
+              {editingTrip ? 'Edit Trip' : 'Log New Trip'}
+            </h2>
+
+            <TripForm
+              trip={editingTrip}
+              vehicles={vehicles}
+              onSubmit={handleTripSubmit}
+              onCancel={() => {
+                setShowTripModal(false);
+                setEditingTrip(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Trips List Modal */}
+      {showTripsList && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1100
+        }}>
+          <div style={{
+            backgroundColor: 'white',
+            borderRadius: '1rem',
+            width: '90%',
+            maxWidth: '800px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            padding: '2rem',
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '1.5rem'
+            }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>
+                🗺️ Trip History - {selectedVehicle?.vehicleName || 'Selected Vehicle'}
+              </h2>
+              <button
+                onClick={() => setShowTripsList(false)}
+                style={{
+                  backgroundColor: 'transparent',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  padding: '0.25rem'
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {tripsLoading ? (
+              <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
+                <div>Loading trips...</div>
+              </div>
+            ) : trips && trips.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {trips.map((trip) => (
+                  <div key={trip._id} style={{
+                    backgroundColor: '#f9fafb',
+                    padding: '1.5rem',
+                    borderRadius: '0.75rem',
+                    border: '1px solid #e5e7eb'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                          <div style={{ fontSize: '1.125rem', fontWeight: '500', color: '#111827' }}>
+                            {trip.startLocation} → {trip.endLocation}
+                          </div>
+                          <span style={{
+                            backgroundColor: '#dbeafe',
+                            color: '#1e40af',
+                            padding: '0.125rem 0.5rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: '500'
+                          }}>
+                            {trip.purpose || 'Personal'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '0.25rem' }}>
+                          {new Date(trip.date).toLocaleDateString()}
+                        </div>
+                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                          <span><strong>Distance:</strong> {trip.distance} km</span>
+                          <span><strong>Cost:</strong> ₹{trip.totalCost?.toFixed(2)}</span>
+                          {(trip.startOdometer || trip.endOdometer) && (
+                            <span><strong>Odometer:</strong> {trip.startOdometer || 0} → {trip.endOdometer || 0} km</span>
+                          )}
+                        </div>
+                        {trip.notes && (
+                          <div style={{ fontSize: '0.875rem', color: '#6b7280', fontStyle: 'italic' }}>
+                            {trip.notes}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <button
+                          onClick={() => handleEditTrip(trip)}
+                          style={{
+                            backgroundColor: '#3b82f6',
+                            color: 'white',
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '0.25rem',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTrip(trip._id)}
+                          style={{
+                            backgroundColor: '#ef4444',
+                            color: 'white',
+                            padding: '0.25rem 0.5rem',
+                            borderRadius: '0.25rem',
+                            fontSize: '0.75rem',
+                            fontWeight: '500',
+                            border: 'none',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
+                <h3 style={{ color: '#4b5563', marginBottom: '1rem' }}>No trips recorded yet</h3>
+                <p style={{ marginBottom: '1rem' }}>Start tracking your journeys by adding your first trip.</p>
+                <button
+                  onClick={() => {
+                    setEditingTrip(null);
+                    setShowTripsList(false);
+                    setShowTripModal(true);
+                  }}
+                  style={{
+                    backgroundColor: '#10b981',
+                    color: 'white',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background-color 150ms ease-in-out'
+                  }}
+                  onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
+                  onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
+                >
+                  Add Your First Trip
+                </button>
               </div>
             )}
           </div>
@@ -4231,6 +4675,461 @@ const VehicleForm = ({ vehicle, onSuccess, onClose }) => {
           }}
         >
           {vehicle ? '💾 Update Vehicle' : '➕ Add Vehicle'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+// TripForm Component
+const TripForm = ({ trip, vehicles, onSubmit, onCancel }) => {
+  const [formData, setFormData] = useState({
+    vehicle: '',
+    date: new Date().toISOString().split('T')[0],
+    startLocation: '',
+    endLocation: '',
+    distance: '',
+    totalCost: '',
+    purpose: 'Personal',
+    notes: '',
+    startOdometer: '',
+    endOdometer: ''
+  });
+
+  const [errors, setErrors] = useState({});
+
+  // Update form data when trip prop changes
+  React.useEffect(() => {
+    if (trip) {
+      setFormData({
+        vehicle: trip.vehicle?._id || trip.vehicle || '',
+        date: trip.date ? new Date(trip.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        startLocation: trip.startLocation || '',
+        endLocation: trip.endLocation || '',
+        distance: trip.distance !== undefined && trip.distance !== null ? String(trip.distance) : '',
+        totalCost: trip.totalCost !== undefined && trip.totalCost !== null ? String(trip.totalCost) : '',
+        purpose: trip.purpose || 'Personal',
+        notes: trip.notes || '',
+        startOdometer: trip.startOdometer !== undefined && trip.startOdometer !== null ? String(trip.startOdometer) : '',
+        endOdometer: trip.endOdometer !== undefined && trip.endOdometer !== null ? String(trip.endOdometer) : ''
+      });
+    }
+  }, [trip]);
+
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.vehicle) newErrors.vehicle = 'Vehicle is required';
+    if (!formData.date) newErrors.date = 'Date is required';
+    if (!formData.startLocation || formData.startLocation.trim() === '') newErrors.startLocation = 'Start location is required';
+    if (!formData.endLocation || formData.endLocation.trim() === '') newErrors.endLocation = 'End location is required';
+
+    const distance = parseFloat(formData.distance);
+    if (isNaN(distance) || distance <= 0) newErrors.distance = 'Distance must be greater than 0';
+
+    const totalCost = parseFloat(formData.totalCost);
+    if (isNaN(totalCost) || totalCost <= 0) newErrors.totalCost = 'Cost must be greater than 0';
+
+    if (formData.startOdometer && formData.endOdometer) {
+      const startOdo = parseFloat(formData.startOdometer);
+      const endOdo = parseFloat(formData.endOdometer);
+      if (!isNaN(startOdo) && !isNaN(endOdo) && endOdo <= startOdo) {
+        newErrors.endOdometer = 'End odometer must be greater than start odometer';
+      }
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      const submitData = {
+        ...formData,
+        distance: parseFloat(formData.distance),
+        totalCost: parseFloat(formData.totalCost),
+        startOdometer: formData.startOdometer && formData.startOdometer.trim() !== '' ? parseFloat(formData.startOdometer) : undefined,
+        endOdometer: formData.endOdometer && formData.endOdometer.trim() !== '' ? parseFloat(formData.endOdometer) : undefined
+      };
+      onSubmit(submitData);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+    // Clear error when user starts typing
+    if (errors[name]) {
+      setErrors(prev => ({
+        ...prev,
+        [name]: ''
+      }));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Vehicle <span style={{ color: '#ef4444' }}>*</span>
+        </label>
+        <select
+          name="vehicle"
+          value={formData.vehicle}
+          onChange={handleChange}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            backgroundColor: 'white'
+          }}
+        >
+          <option value="">Select a vehicle</option>
+          {vehicles.map(vehicle => (
+            <option key={vehicle._id} value={vehicle._id}>
+              {vehicle.vehicleName} ({vehicle.company} {vehicle.model})
+            </option>
+          ))}
+        </select>
+        {errors.vehicle && (
+          <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            {errors.vehicle}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Date <span style={{ color: '#ef4444' }}>*</span>
+        </label>
+        <input
+          type="date"
+          name="date"
+          value={formData.date}
+          onChange={handleChange}
+          max={new Date().toISOString().split('T')[0]}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem'
+          }}
+        />
+        {errors.date && (
+          <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+            {errors.date}
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Start Location <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="text"
+            name="startLocation"
+            value={formData.startLocation}
+            onChange={handleChange}
+            placeholder="e.g., Home, Office"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem'
+            }}
+          />
+          {errors.startLocation && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.startLocation}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            End Location <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="text"
+            name="endLocation"
+            value={formData.endLocation}
+            onChange={handleChange}
+            placeholder="e.g., Airport, Mall"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem'
+            }}
+          />
+          {errors.endLocation && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.endLocation}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Distance (km) <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="number"
+            name="distance"
+            value={formData.distance}
+            onChange={handleChange}
+            placeholder="0.0"
+            step="0.1"
+            min="0"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem'
+            }}
+          />
+          {errors.distance && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.distance}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Total Cost (₹) <span style={{ color: '#ef4444' }}>*</span>
+          </label>
+          <input
+            type="number"
+            name="totalCost"
+            value={formData.totalCost}
+            onChange={handleChange}
+            placeholder="0.00"
+            step="0.01"
+            min="0"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem'
+            }}
+          />
+          {errors.totalCost && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.totalCost}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            Start Odometer (km)
+          </label>
+          <input
+            type="number"
+            name="startOdometer"
+            value={formData.startOdometer}
+            onChange={handleChange}
+            placeholder="Optional"
+            step="1"
+            min="0"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem'
+            }}
+          />
+        </div>
+
+        <div>
+          <label style={{
+            display: 'block',
+            fontSize: '0.875rem',
+            fontWeight: '500',
+            color: '#374151',
+            marginBottom: '0.5rem'
+          }}>
+            End Odometer (km)
+          </label>
+          <input
+            type="number"
+            name="endOdometer"
+            value={formData.endOdometer}
+            onChange={handleChange}
+            placeholder="Optional"
+            step="1"
+            min="0"
+            style={{
+              width: '100%',
+              padding: '0.75rem',
+              border: '1px solid #d1d5db',
+              borderRadius: '0.5rem',
+              fontSize: '0.875rem'
+            }}
+          />
+          {errors.endOdometer && (
+            <div style={{ color: '#ef4444', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+              {errors.endOdometer}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Purpose
+        </label>
+        <select
+          name="purpose"
+          value={formData.purpose}
+          onChange={handleChange}
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            backgroundColor: 'white'
+          }}
+        >
+          <option value="Personal">Personal</option>
+          <option value="Business">Business</option>
+          <option value="Commute">Commute</option>
+          <option value="Leisure">Leisure</option>
+          <option value="Emergency">Emergency</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div>
+        <label style={{
+          display: 'block',
+          fontSize: '0.875rem',
+          fontWeight: '500',
+          color: '#374151',
+          marginBottom: '0.5rem'
+        }}>
+          Notes
+        </label>
+        <textarea
+          name="notes"
+          value={formData.notes}
+          onChange={handleChange}
+          placeholder="Optional notes about the trip"
+          rows="3"
+          style={{
+            width: '100%',
+            padding: '0.75rem',
+            border: '1px solid #d1d5db',
+            borderRadius: '0.5rem',
+            fontSize: '0.875rem',
+            resize: 'vertical'
+          }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          style={{
+            padding: '0.75rem 1.5rem',
+            borderRadius: '0.5rem',
+            fontWeight: '500',
+            border: '1px solid #d1d5db',
+            backgroundColor: 'white',
+            color: '#6b7280',
+            cursor: 'pointer',
+            transition: 'background-color 150ms ease-in-out'
+          }}
+          onMouseOver={(e) => e.target.style.backgroundColor = '#f9fafb'}
+          onMouseOut={(e) => e.target.style.backgroundColor = 'white'}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          style={{
+            backgroundColor: '#10b981',
+            color: 'white',
+            padding: '0.75rem 1.5rem',
+            borderRadius: '0.5rem',
+            fontWeight: '500',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background-color 150ms ease-in-out'
+          }}
+          onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
+          onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
+        >
+          {trip ? '💾 Update Trip' : '➕ Log Trip'}
         </button>
       </div>
     </form>
