@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import CommunityPage from './pages/Community';
 import './MotorMateApp.css';
 
 // Main App Component
@@ -109,6 +110,7 @@ const MotorMateApp = () => {
       {currentPage === 'home' && <HomePage onNavigate={navigateToPage} />}
       {currentPage === 'dashboard' && <DashboardPage />}
       {currentPage === 'trips' && <TripsPage />}
+      {currentPage === 'community' && <CommunityPage />}
       {currentPage === 'profile' && <ProfilePage />}
     </div>
   );
@@ -183,6 +185,22 @@ const Navbar = ({ currentPage, onNavigate, onLogout }) => {
             }}
           >
             Trips
+          </button>
+          <button
+            onClick={() => handleNavigation('community')}
+            className="transition-colors"
+            style={{
+              color: currentPage === 'community' ? '#bfdbfe' : '#ffffff',
+              textDecoration: 'none',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              padding: '0.5rem 0',
+              transition: 'color 150ms ease-in-out'
+            }}
+          >
+            Community
           </button>
           <button
             onClick={() => handleNavigation('profile')}
@@ -293,6 +311,24 @@ const Navbar = ({ currentPage, onNavigate, onLogout }) => {
               }}
             >
               Trips
+            </button>
+            <button
+              onClick={() => handleNavigation('community')}
+              className="transition-colors"
+              style={{
+                color: '#ffffff',
+                textDecoration: 'none',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                padding: '0.5rem 0',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'color 150ms ease-in-out'
+              }}
+            >
+              Community
             </button>
             <button
               onClick={() => handleNavigation('profile')}
