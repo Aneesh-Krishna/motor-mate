@@ -503,6 +503,8 @@ const DashboardPage = () => {
   // Expense management state
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [showExpensesList, setShowExpensesList] = useState(false);
+  const [showNextServiceModal, setShowNextServiceModal] = useState(false);
+  const [nextServiceDueDate, setNextServiceDueDate] = useState('');
   const [expenseFormType, setExpenseFormType] = useState('Fuel'); // 'Fuel', 'Service', 'Other'
   const [editingExpense, setEditingExpense] = useState(null);
   const [expenses, setExpenses] = useState([]);
@@ -690,6 +692,39 @@ const DashboardPage = () => {
     } catch (error) {
       console.error('Error saving vehicle:', error);
       setErrorMessage('Failed to save vehicle: ' + error.message);
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleNextServiceDueUpdate = async () => {
+    if (!nextServiceDueDate) {
+      setErrorMessage('Please select a date for next service due');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await apiCall(`/vehicles/${selectedVehicle._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ nextServiceDue: nextServiceDueDate })
+      });
+
+      const updatedVehicles = vehicles.map(v =>
+        v._id === selectedVehicle._id ? { ...v, nextServiceDue: response.data.nextServiceDue } : v
+      );
+      setVehicles(updatedVehicles);
+      setSelectedVehicle({ ...selectedVehicle, nextServiceDue: response.data.nextServiceDue });
+
+      setShowNextServiceModal(false);
+      setNextServiceDueDate('');
+      setSuccessMessage('Next service due date updated successfully!');
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error('Error updating next service due:', error);
+      setErrorMessage('Failed to update next service due date: ' + error.message);
       setTimeout(() => setErrorMessage(''), 3000);
     } finally {
       setLoading(false);
@@ -1209,6 +1244,55 @@ const DashboardPage = () => {
                         </p>
                       </div>
                     </div>
+
+                    {/* Next Service Due Timeline Item */}
+                    <div className="timeline-item">
+                      <div className="timeline-icon" style={{ backgroundColor: '#fef3c7' }}>
+                        <svg className="w-4 h-4" style={{ color: '#d97706' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <p style={{ fontWeight: '500', color: '#111827' }}>Next Service Due</p>
+                            {selectedVehicle?.nextServiceDue ? (
+                              <p style={{ fontSize: '0.875rem', color: '#4b5563' }}>
+                                {new Date(selectedVehicle.nextServiceDue).toLocaleDateString()}
+                              </p>
+                            ) : (
+                              <p style={{ fontSize: '0.875rem', color: '#9ca3af', fontStyle: 'italic' }}>
+                                Not set
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => {
+                              setNextServiceDueDate(selectedVehicle?.nextServiceDue ? new Date(selectedVehicle.nextServiceDue).toISOString().split('T')[0] : '');
+                              setShowNextServiceModal(true);
+                            }}
+                            style={{
+                              backgroundColor: '#f59e0b',
+                              color: 'white',
+                              padding: '0.25rem 0.75rem',
+                              borderRadius: '0.375rem',
+                              fontSize: '0.75rem',
+                              fontWeight: '500',
+                              border: 'none',
+                              cursor: 'pointer',
+                              transition: 'background-color 150ms ease-in-out'
+                            }}
+                            onMouseOver={(e) => e.target.style.backgroundColor = '#d97706'}
+                            onMouseOut={(e) => e.target.style.backgroundColor = '#f59e0b'}
+                            title="Set next service due date"
+                          >
+                            {selectedVehicle?.nextServiceDue ? 'Edit' : 'Add'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="timeline-item">
                       <div className="timeline-icon" style={{ backgroundColor: '#dcfce7' }}>
                         <svg className="w-4 h-4" style={{ color: '#059669' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1773,6 +1857,131 @@ const DashboardPage = () => {
                 setEditingExpense(null);
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Next Service Due Modal */}
+      {showNextServiceModal && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}
+          onClick={() => {
+            setShowNextServiceModal(false);
+            setNextServiceDueDate('');
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '1rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              padding: '2rem',
+              width: '90%',
+              maxWidth: '400px',
+              maxHeight: '80vh',
+              overflowY: 'auto'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+              <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>
+                {selectedVehicle?.nextServiceDue ? '⚙️ Edit Service Due Date' : '➕ Add Next Service Due'}
+              </h2>
+              <button
+                onClick={() => {
+                  setShowNextServiceModal(false);
+                  setNextServiceDueDate('');
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'grid', gap: '1.5rem' }}>
+              <div>
+                <label style={{
+                  display: 'block',
+                  fontSize: '0.875rem',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '0.5rem'
+                }}>
+                  Next Service Due Date <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="date"
+                  value={nextServiceDueDate}
+                  onChange={(e) => setNextServiceDueDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '0.5rem',
+                    fontSize: '1rem'
+                  }}
+                />
+                <div style={{ fontSize: '0.75rem', color: '#6b7280', marginTop: '0.25rem' }}>
+                  Select the date when the next service is due
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '1rem', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={() => {
+                    setShowNextServiceModal(false);
+                    setNextServiceDueDate('');
+                  }}
+                  style={{
+                    backgroundColor: '#6b7280',
+                    color: 'white',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: 'pointer',
+                    transition: 'background-color 150ms ease-in-out'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleNextServiceDueUpdate}
+                  disabled={loading || !nextServiceDueDate}
+                  style={{
+                    backgroundColor: '#f59e0b',
+                    color: 'white',
+                    padding: '0.75rem 1.5rem',
+                    borderRadius: '0.5rem',
+                    fontWeight: '500',
+                    border: 'none',
+                    cursor: loading || !nextServiceDueDate ? 'not-allowed' : 'pointer',
+                    transition: 'background-color 150ms ease-in-out',
+                    opacity: loading || !nextServiceDueDate ? 0.5 : 1
+                  }}
+                >
+                  {loading ? 'Saving...' : '💾 Save Date'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
