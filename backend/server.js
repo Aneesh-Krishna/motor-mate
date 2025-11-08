@@ -15,6 +15,7 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/vehicles', require('./routes/vehicles'));
 app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/trips', require('./routes/trips'));
 
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to MotorMate API - Vehicle Management System' });
