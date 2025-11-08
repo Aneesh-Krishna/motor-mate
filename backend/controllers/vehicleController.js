@@ -74,7 +74,7 @@ const createVehicle = async (req, res) => {
     };
 
     // Validate required fields
-    const requiredFields = ['vehicleName', 'company', 'model', 'fuelType', 'purchasedDate', 'vehicleCost', 'insuranceExpiry', 'odometerReading', 'vehicleRegistrationNumber'];
+    const requiredFields = ['vehicleName', 'company', 'model', 'fuelType', 'purchasedDate', 'vehicleCost', 'insuranceExpiry', 'odometerReading', 'vehicleRegistrationNumber', 'nextServiceDue'];
     const missingFields = requiredFields.filter(field => !vehicleData[field]);
 
     if (missingFields.length > 0) {
@@ -96,6 +96,13 @@ const createVehicle = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Insurance expiry date must be in the future'
+      });
+    }
+
+    if (vehicleData.nextServiceDue && new Date(vehicleData.nextServiceDue) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Next service due date must be in the future'
       });
     }
 
@@ -188,6 +195,13 @@ const updateVehicle = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Insurance expiry date must be in the future'
+      });
+    }
+
+    if (req.body.nextServiceDue && new Date(req.body.nextServiceDue) < new Date()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Next service due date must be in the future'
       });
     }
 
