@@ -1224,6 +1224,34 @@ const DashboardPage = () => {
                         </p>
                       </div>
                     </div>
+                    <div className="timeline-item">
+                      <div className="timeline-icon" style={{ backgroundColor: '#dbeafe' }}>
+                        <svg className="w-4 h-4" style={{ color: '#2563eb' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p style={{ fontWeight: '500', color: '#111827' }}>Insurance expiry</p>
+                        <p style={{ fontSize: '0.875rem', color: '#4b5563' }}>
+                          {new Date(selectedVehicle?.insuranceExpiry).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedVehicle?.emissionTestExpiry && (
+                      <div className="timeline-item">
+                        <div className="timeline-icon" style={{ backgroundColor: '#dbeafe' }}>
+                          <svg className="w-4 h-4" style={{ color: '#2563eb' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                          </svg>
+                        </div>
+                        <div>
+                          <p style={{ fontWeight: '500', color: '#111827' }}>Emission test expiry</p>
+                          <p style={{ fontSize: '0.875rem', color: '#4b5563' }}>
+                            {new Date(selectedVehicle?.emissionTestExpiry).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -1575,7 +1603,7 @@ const DashboardPage = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ fontWeight: '500', color: '#374151' }}>Vehicle Cost:</span>
                     <span style={{ color: '#111827' }}>
-                      ${viewingVehicle.vehicleCost ? viewingVehicle.vehicleCost.toLocaleString() : '0'}
+                      ₹{viewingVehicle.vehicleCost ? viewingVehicle.vehicleCost.toLocaleString() : '0'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
