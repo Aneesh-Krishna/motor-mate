@@ -3,7 +3,10 @@ import { useSelector, useDispatch } from 'react-redux';
 import { selectSelectedVehicle } from '../ducks/Vehicle.duck';
 import { selectExpenses, selectMileageStats, selectExpensesLoading } from '../ducks/Expense.duck';
 import { fetchExpenses, fetchMileageStats } from '../ducks/Expense.duck';
+import { getRecentTrips } from '../ducks/Trip.duck';
 import ExpenseForm from './ExpenseForm';
+import AddTripForm from './AddTripForm';
+import TripList from './TripList';
 import './VehicleDetails.css';
 
 const VehicleDetails = ({ onEdit, onDelete, onQuickAction, onRefreshExpenseData }) => {
@@ -11,15 +14,20 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction, onRefreshExpenseData 
   const expenses = useSelector(selectExpenses);
   const mileageStats = useSelector(selectMileageStats);
   const expensesLoading = useSelector(selectExpensesLoading);
+  const { recentTrips, loading: tripsLoading } = useSelector(state => state.trips);
   const dispatch = useDispatch();
   const [showExpenseForm, setShowExpenseForm] = useState(false);
   const [expenseFormType, setExpenseFormType] = useState(null);
+  const [showTripForm, setShowTripForm] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
+  const [activeTab, setActiveTab] = useState('expenses'); // 'expenses' or 'trips'
 
-  // Fetch expenses when vehicle changes
+  // Fetch expenses and trips when vehicle changes
   useEffect(() => {
     if (vehicle) {
       dispatch(fetchExpenses({ vehicleId: vehicle._id, limit: 10 }));
       dispatch(fetchMileageStats(vehicle._id));
+      dispatch(getRecentTrips(vehicle._id, 5));
     }
   }, [vehicle, dispatch]);
 
@@ -126,6 +134,30 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction, onRefreshExpenseData 
     if (onRefreshExpenseData) {
       console.log('Calling parent refresh function');
       onRefreshExpenseData();
+    }
+  };
+
+  const handleTripFormOpen = () => {
+    setEditingTrip(null);
+    setShowTripForm(true);
+  };
+
+  const handleEditTrip = (trip) => {
+    setEditingTrip(trip);
+    setShowTripForm(true);
+  };
+
+  const handleTripFormClose = () => {
+    setShowTripForm(false);
+    setEditingTrip(null);
+  };
+
+  const handleTripFormSuccess = () => {
+    console.log('Trip form success callback triggered');
+    // Refresh trip data after successful create/update
+    if (vehicle) {
+      console.log('Refreshing trips for vehicle:', vehicle._id);
+      dispatch(getRecentTrips(vehicle._id, 5));
     }
   };
 
@@ -282,6 +314,81 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction, onRefreshExpenseData 
           )}
         </div>
 
+        {/* Trips Section */}
+        <div className="detail-section">
+          <div className="section-header">
+            <h3>🗺️ Recent Trips</h3>
+            <div className="section-tabs">
+              <button
+                className={`tab-btn ${activeTab === 'expenses' ? 'active' : ''}`}
+                onClick={() => setActiveTab('expenses')}
+              >
+                Expenses
+              </button>
+              <button
+                className={`tab-btn ${activeTab === 'trips' ? 'active' : ''}`}
+                onClick={() => setActiveTab('trips')}
+              >
+                Trips
+              </button>
+            </div>
+          </div>
+
+          {activeTab === 'trips' && (
+            <>
+              <div className="trip-actions">
+                <button
+                  className="btn btn-primary"
+                  onClick={handleTripFormOpen}
+                >
+                  <span className="btn-icon">➕</span>
+                  Add Trip
+                </button>
+              </div>
+
+              {tripsLoading ? (
+                <div className="loading-small">Loading trips...</div>
+              ) : recentTrips && recentTrips.length > 0 ? (
+                <div className="recent-trips">
+                  {recentTrips.map((trip) => (
+                    <div key={trip._id} className="trip-item">
+                      <div className="trip-route">
+                        <span className="trip-start">{trip.startLocation}</span>
+                        <span className="trip-arrow">→</span>
+                        <span className="trip-end">{trip.endLocation}</span>
+                      </div>
+                      <div className="trip-details">
+                        <div className="trip-distance">{trip.distance} km</div>
+                        <div className="trip-cost">₹{trip.totalCost?.toFixed(2)}</div>
+                        <div className="trip-date">{new Date(trip.date).toLocaleDateString()}</div>
+                      </div>
+                      <div className="trip-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleEditTrip(trip)}
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-trips">
+                  <div className="no-trips-icon">🗺️</div>
+                  <p>No trips recorded yet</p>
+                  <button
+                    className="btn btn-primary"
+                    onClick={handleTripFormOpen}
+                  >
+                    Add Your First Trip
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         {/* Mileage Stats Section */}
         {mileageStats && (
           <div className="detail-section">
@@ -352,6 +459,16 @@ const VehicleDetails = ({ onEdit, onDelete, onQuickAction, onRefreshExpenseData 
             expense={{ expenseType: expenseFormType }}
             onClose={handleExpenseFormClose}
             onSuccess={handleExpenseFormSuccess}
+          />
+        )}
+
+        {/* Trip Form Modal */}
+        {showTripForm && (
+          <AddTripForm
+            vehicle={vehicle}
+            trip={editingTrip}
+            onClose={handleTripFormClose}
+            onSuccess={handleTripFormSuccess}
           />
         )}
       </div>

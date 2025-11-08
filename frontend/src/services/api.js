@@ -163,8 +163,50 @@ export const expensesAPI = {
   }
 };
 
+// API methods for trips
+export const tripsAPI = {
+  // Get all trips for a user
+  getTrips: (filters = {}) => {
+    const queryString = new URLSearchParams(filters).toString();
+    return apiRequest(`/trips${queryString ? '?' + queryString : ''}`);
+  },
+
+  // Get single trip by ID
+  getTrip: (id) => apiRequest(`/trips/${id}`),
+
+  // Create new trip
+  createTrip: (tripData) => apiRequest('/trips', {
+    method: 'POST',
+    body: JSON.stringify(tripData),
+  }),
+
+  // Update trip
+  updateTrip: (id, tripData) => apiRequest(`/trips/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(tripData),
+  }),
+
+  // Delete trip
+  deleteTrip: (id) => apiRequest(`/trips/${id}`, {
+    method: 'DELETE',
+  }),
+
+  // Get vehicle trip statistics
+  getTripStats: (vehicleId, startDate, endDate) => {
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
+    return apiRequest(`/trips/stats/${vehicleId}${params.toString() ? '?' + params.toString() : ''}`);
+  },
+
+  // Get recent trips for a vehicle
+  getRecentTrips: (vehicleId, limit = 10) =>
+    apiRequest(`/trips/recent/${vehicleId}?limit=${limit}`),
+};
+
 export default {
   vehicles: vehiclesAPI,
   auth: authAPI,
   expenses: expensesAPI,
+  trips: tripsAPI,
 };
