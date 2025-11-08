@@ -108,6 +108,7 @@ const MotorMateApp = () => {
       />
       {currentPage === 'home' && <HomePage onNavigate={navigateToPage} />}
       {currentPage === 'dashboard' && <DashboardPage />}
+      {currentPage === 'trips' && <TripsPage />}
       {currentPage === 'profile' && <ProfilePage />}
     </div>
   );
@@ -166,6 +167,22 @@ const Navbar = ({ currentPage, onNavigate, onLogout }) => {
             }}
           >
             Dashboard
+          </button>
+          <button
+            onClick={() => handleNavigation('trips')}
+            className="transition-colors"
+            style={{
+              color: currentPage === 'trips' ? '#bfdbfe' : '#ffffff',
+              textDecoration: 'none',
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '1rem',
+              padding: '0.5rem 0',
+              transition: 'color 150ms ease-in-out'
+            }}
+          >
+            Trips
           </button>
           <button
             onClick={() => handleNavigation('profile')}
@@ -258,6 +275,24 @@ const Navbar = ({ currentPage, onNavigate, onLogout }) => {
               }}
             >
               Dashboard
+            </button>
+            <button
+              onClick={() => handleNavigation('trips')}
+              className="transition-colors"
+              style={{
+                color: '#ffffff',
+                textDecoration: 'none',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '1rem',
+                padding: '0.5rem 0',
+                textAlign: 'left',
+                width: '100%',
+                transition: 'color 150ms ease-in-out'
+              }}
+            >
+              Trips
             </button>
             <button
               onClick={() => handleNavigation('profile')}
@@ -511,14 +546,7 @@ const DashboardPage = () => {
   const [expenseStats, setExpenseStats] = useState(null);
   const [expensesLoading, setExpensesLoading] = useState(false);
 
-  // Trip management state
-  const [showTripModal, setShowTripModal] = useState(false);
-  const [showTripsList, setShowTripsList] = useState(false);
-  const [editingTrip, setEditingTrip] = useState(null);
-  const [trips, setTrips] = useState([]);
-  const [tripStats, setTripStats] = useState(null);
-  const [tripsLoading, setTripsLoading] = useState(false);
-
+  
   // API call function
   const apiCall = async (endpoint, options = {}) => {
     const token = localStorage.getItem('token');
@@ -561,18 +589,14 @@ const DashboardPage = () => {
     fetchVehicles();
   }, []);
 
-  // Load expenses, trips, and stats when vehicle is selected
+  // Load expenses and stats when vehicle is selected
   React.useEffect(() => {
     if (selectedVehicle) {
       fetchExpenses(selectedVehicle._id);
       fetchExpenseStats(selectedVehicle._id);
-      fetchTrips(selectedVehicle._id);
-      fetchTripStats(selectedVehicle._id);
     } else {
       setExpenses([]);
       setExpenseStats(null);
-      setTrips([]);
-      setTripStats(null);
     }
   }, [selectedVehicle]);
 
@@ -792,10 +816,6 @@ const DashboardPage = () => {
         setEditingExpense(null);
         setShowExpenseModal(true);
         break;
-      case 'Log Trip':
-        setEditingTrip(null);
-        setShowTripModal(true);
-        break;
       default:
         setSuccessMessage(`${action} functionality would be implemented here`);
         setTimeout(() => setSuccessMessage(''), 3000);
@@ -889,116 +909,7 @@ const DashboardPage = () => {
     }, 100);
   };
 
-  // Trip-related functions
-  const fetchTrips = async (vehicleId = null) => {
-    try {
-      setTripsLoading(true);
-      const endpoint = vehicleId ? `/trips?vehicle=${vehicleId}` : '/trips';
-      const response = await apiCall(endpoint);
-      setTrips(response.data || []);
-    } catch (error) {
-      console.error('Error fetching trips:', error);
-      setErrorMessage('Failed to fetch trips: ' + (error.message || 'Unknown error'));
-      setTimeout(() => setErrorMessage(''), 5000);
-    } finally {
-      setTripsLoading(false);
-    }
-  };
-
-  const fetchTripStats = async (vehicleId) => {
-    try {
-      const response = await apiCall(`/trips/stats/${vehicleId}`);
-      setTripStats(response.data);
-    } catch (error) {
-      console.error('Error fetching trip stats:', error);
-      setTripStats(null);
-    }
-  };
-
-  const handleTripSubmit = async (tripData) => {
-    try {
-      setTripsLoading(true);
-
-      if (editingTrip) {
-        // Update existing trip
-        const response = await apiCall(`/trips/${editingTrip._id}`, {
-          method: 'PUT',
-          body: JSON.stringify(tripData)
-        });
-
-        const updatedTrips = trips.map(t =>
-          t._id === editingTrip._id ? response.data : t
-        );
-        setTrips(updatedTrips);
-        setSuccessMessage('Trip updated successfully!');
-      } else {
-        // Add new trip
-        const response = await apiCall('/trips', {
-          method: 'POST',
-          body: JSON.stringify(tripData)
-        });
-
-        setTrips([response.data, ...trips]);
-        setSuccessMessage('Trip added successfully!');
-      }
-
-      setShowTripModal(false);
-      setEditingTrip(null);
-
-      // Refresh stats
-      if (selectedVehicle) {
-        fetchTripStats(selectedVehicle._id);
-      }
-
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (error) {
-      console.error('Error saving trip:', error);
-      setErrorMessage('Failed to save trip: ' + (error.message || 'Unknown error'));
-      setTimeout(() => setErrorMessage(''), 5000);
-    } finally {
-      setTripsLoading(false);
-    }
-  };
-
-  const handleDeleteTrip = async (tripId) => {
-    if (window.confirm('Are you sure you want to delete this trip?')) {
-      try {
-        setTripsLoading(true);
-        await apiCall(`/trips/${tripId}`, {
-          method: 'DELETE'
-        });
-
-        const updatedTrips = trips.filter(t => t._id !== tripId);
-        setTrips(updatedTrips);
-        setSuccessMessage('Trip deleted successfully!');
-
-        // Refresh stats
-        if (selectedVehicle) {
-          fetchTripStats(selectedVehicle._id);
-        }
-
-        setTimeout(() => setSuccessMessage(''), 3000);
-      } catch (error) {
-        console.error('Error deleting trip:', error);
-        setErrorMessage('Failed to delete trip: ' + error.message);
-        setTimeout(() => setErrorMessage(''), 3000);
-      } finally {
-        setTripsLoading(false);
-      }
-    }
-  };
-
-  const handleEditTrip = (trip) => {
-    // Close the list modal first
-    setShowTripsList(false);
-    // Then set up the edit modal
-    setEditingTrip(trip);
-    // Use setTimeout to ensure list modal is closed before opening edit modal
-    setTimeout(() => {
-      setShowTripModal(true);
-    }, 100);
-  };
-
+  
   // Display messages
   const displayMessage = () => {
     if (successMessage) {
@@ -1513,64 +1424,7 @@ const DashboardPage = () => {
                   </button>
                 </div>
 
-                {/* Trip Statistics Card */}
-                <div className="info-card">
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
-                    Trip Summary
-                  </h3>
-                  {tripStats ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Trips:</span>
-                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
-                          {tripStats.totalTrips || 0}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Distance:</span>
-                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
-                          {(tripStats.totalDistance || 0).toLocaleString()} km
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Total Cost:</span>
-                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
-                          ₹{(tripStats.totalCost || 0).toLocaleString()}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.875rem', color: '#4b5563' }}>Average Distance:</span>
-                        <span style={{ fontSize: '1.125rem', fontWeight: '700', color: '#111827' }}>
-                          {tripStats.totalTrips > 0 ? (tripStats.totalDistance / tripStats.totalTrips).toFixed(1) : 0} km
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '1rem', color: '#6b7280' }}>
-                      <div>No trip data available</div>
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setShowTripsList(true)}
-                    style={{
-                      width: '100%',
-                      marginTop: '1rem',
-                      backgroundColor: '#10b981',
-                      color: 'white',
-                      padding: '0.5rem 1rem',
-                      borderRadius: '0.5rem',
-                      fontWeight: '500',
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'background-color 150ms ease-in-out'
-                    }}
-                    onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
-                    onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
-                  >
-                    View All Trips
-                  </button>
-                </div>
-
+                
                 {/* Quick Actions Card */}
                 <div className="info-card">
                   <h3 style={{ fontSize: '1.25rem', fontWeight: '700', color: '#111827', marginBottom: '1rem' }}>
@@ -1662,34 +1516,7 @@ const DashboardPage = () => {
                       </div>
                     </button>
 
-                    <button
-                      onClick={() => handleQuickAction('Log Trip')}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.75rem',
-                        width: '100%',
-                        padding: '0.75rem',
-                        backgroundColor: '#e0e7ff',
-                        border: 'none',
-                        borderRadius: '0.5rem',
-                        cursor: 'pointer',
-                        transition: 'background-color 150ms ease-in-out'
-                      }}
-                      onMouseOver={(e) => e.target.style.backgroundColor = '#c7d2fe'}
-                      onMouseOut={(e) => e.target.style.backgroundColor = '#e0e7ff'}
-                    >
-                      <div style={{ backgroundColor: '#6366f1', padding: '0.5rem', borderRadius: '0.375rem' }}>
-                        <svg className="w-5 h-5" style={{ color: 'white' }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                        </svg>
-                      </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontWeight: '500', color: '#111827' }}>Log Trip</div>
-                        <div style={{ fontSize: '0.875rem', color: '#4b5563' }}>Record a journey</div>
-                      </div>
-                    </button>
-                  </div>
+                                      </div>
                 </div>
               </div>
             </>
@@ -2416,217 +2243,311 @@ const DashboardPage = () => {
         </div>
       )}
 
-      {/* Trip Form Modal */}
-      {showTripModal && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 1100
-          }}
-          onClick={() => {
-            setShowTripModal(false);
-            setEditingTrip(null);
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'white',
-              borderRadius: '1rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
-              padding: '2rem',
-              width: '90%',
-              maxWidth: '600px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              position: 'relative'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              style={{
-                position: 'absolute',
-                top: '1rem',
-                right: '1rem',
-                background: 'none',
-                border: 'none',
-                fontSize: '1.5rem',
-                cursor: 'pointer',
-                color: '#6b7280'
-              }}
-              onClick={() => {
-                setShowTripModal(false);
-                setEditingTrip(null);
-              }}
-            >
-              ×
-            </button>
+          </>
+  );
+};
 
-            <h2 style={{ marginBottom: '1.5rem', color: '#1f2937' }}>
-              {editingTrip ? 'Edit Trip' : 'Log New Trip'}
-            </h2>
+// TripsPage Component
+const TripsPage = () => {
+  const [vehicles, setVehicles] = useState([]);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [trips, setTrips] = useState([]);
+  const [tripStats, setTripStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [tripsLoading, setTripsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-            <TripForm
-              trip={editingTrip}
-              vehicles={vehicles}
-              onSubmit={handleTripSubmit}
-              onCancel={() => {
-                setShowTripModal(false);
-                setEditingTrip(null);
-              }}
-            />
-          </div>
-        </div>
-      )}
+  // Modal states
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
 
-      {/* Trips List Modal */}
-      {showTripsList && (
+  // API call function
+  const apiCall = async (endpoint, options = {}) => {
+    const token = localStorage.getItem('token');
+    const url = `http://localhost:5000/api${endpoint}`;
+
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers
+      },
+      ...options
+    };
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.reload();
+        }
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  };
+
+  // Load vehicles on component mount
+  React.useEffect(() => {
+    localStorage.setItem('currentPage', 'trips');
+    fetchVehicles();
+  }, []);
+
+  // Load trips and stats when vehicle is selected
+  React.useEffect(() => {
+    if (selectedVehicle) {
+      fetchTrips(selectedVehicle._id);
+      fetchTripStats(selectedVehicle._id);
+    } else {
+      setTrips([]);
+      setTripStats(null);
+    }
+  }, [selectedVehicle]);
+
+  const fetchVehicles = async () => {
+    try {
+      setLoading(true);
+      const response = await apiCall('/vehicles');
+      setVehicles(response.data);
+
+      // Set selected vehicle if none selected and vehicles exist
+      if (!selectedVehicle && response.data.length > 0) {
+        setSelectedVehicle(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching vehicles:', error);
+      setErrorMessage('Error fetching vehicles: ' + error.message);
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTrips = async (vehicleId) => {
+    try {
+      setTripsLoading(true);
+      const endpoint = vehicleId ? `/trips?vehicle=${vehicleId}` : '/trips';
+      const response = await apiCall(endpoint);
+      setTrips(response.data || []);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      setErrorMessage('Failed to fetch trips: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  const fetchTripStats = async (vehicleId) => {
+    try {
+      const response = await apiCall(`/trips/stats/${vehicleId}`);
+      setTripStats(response.data);
+    } catch (error) {
+      console.error('Error fetching trip stats:', error);
+      setTripStats(null);
+    }
+  };
+
+  const handleTripSubmit = async (tripData) => {
+    try {
+      setTripsLoading(true);
+
+      if (editingTrip) {
+        // Update existing trip
+        const response = await apiCall(`/trips/${editingTrip._id}`, {
+          method: 'PUT',
+          body: JSON.stringify(tripData)
+        });
+
+        const updatedTrips = trips.map(t =>
+          t._id === editingTrip._id ? response.data : t
+        );
+        setTrips(updatedTrips);
+        setSuccessMessage('Trip updated successfully!');
+      } else {
+        // Add new trip
+        const response = await apiCall('/trips', {
+          method: 'POST',
+          body: JSON.stringify(tripData)
+        });
+
+        setTrips([response.data, ...trips]);
+        setSuccessMessage('Trip added successfully!');
+      }
+
+      setShowTripModal(false);
+      setEditingTrip(null);
+
+      // Refresh stats
+      if (selectedVehicle) {
+        fetchTripStats(selectedVehicle._id);
+      }
+
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error('Error saving trip:', error);
+      setErrorMessage('Failed to save trip: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = async (tripId) => {
+    if (window.confirm('Are you sure you want to delete this trip?')) {
+      try {
+        setTripsLoading(true);
+        await apiCall(`/trips/${tripId}`, {
+          method: 'DELETE'
+        });
+
+        const updatedTrips = trips.filter(t => t._id !== tripId);
+        setTrips(updatedTrips);
+        setSuccessMessage('Trip deleted successfully!');
+
+        // Refresh stats
+        if (selectedVehicle) {
+          fetchTripStats(selectedVehicle._id);
+        }
+
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (error) {
+        console.error('Error deleting trip:', error);
+        setErrorMessage('Failed to delete trip: ' + error.message);
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        setTripsLoading(false);
+      }
+    }
+  };
+
+  const handleEditTrip = (trip) => {
+    setEditingTrip(trip);
+    setShowTripModal(true);
+  };
+
+  const handleAddTrip = () => {
+    if (!selectedVehicle) {
+      setErrorMessage('Please select a vehicle first');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+    setEditingTrip(null);
+    setShowTripModal(true);
+  };
+
+  const displayMessage = () => {
+    if (successMessage) {
+      return (
         <div style={{
           position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1100
+          top: '20px',
+          right: '20px',
+          backgroundColor: '#dcfce7',
+          color: '#14532d',
+          padding: '1rem 1.5rem',
+          borderRadius: '0.5rem',
+          border: '1px solid #86efac',
+          zIndex: 1000,
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+        }}>
+          ✅ {successMessage}
+        </div>
+      );
+    }
+    if (errorMessage) {
+      return (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          backgroundColor: '#fee2e2',
+          color: '#991b1b',
+          padding: '1rem 1.5rem',
+          borderRadius: '0.5rem',
+          border: '1px solid #fca5a5',
+          zIndex: 1000,
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)'
+        }}>
+          ❌ {errorMessage}
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <>
+      {displayMessage()}
+      <div className="min-h-screen" style={{ backgroundColor: '#f3f4f6' }}>
+        {/* Header */}
+        <div style={{
+          backgroundColor: 'white',
+          borderBottom: '1px solid #e5e7eb',
+          padding: '1.5rem 0'
         }}>
           <div style={{
-            backgroundColor: 'white',
-            borderRadius: '1rem',
-            width: '90%',
-            maxWidth: '800px',
-            maxHeight: '90vh',
-            overflowY: 'auto',
-            padding: '2rem',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            maxWidth: '1200px',
+            margin: '0 auto',
+            padding: '0 1rem'
           }}>
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1.5rem'
+              alignItems: 'center'
             }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: '700', color: '#111827' }}>
-                🗺️ Trip History - {selectedVehicle?.vehicleName || 'Selected Vehicle'}
-              </h2>
-              <button
-                onClick={() => setShowTripsList(false)}
-                style={{
-                  backgroundColor: 'transparent',
-                  border: 'none',
-                  fontSize: '1.5rem',
-                  cursor: 'pointer',
-                  color: '#6b7280',
-                  padding: '0.25rem'
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {tripsLoading ? (
-              <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
-                <div>Loading trips...</div>
+              <div>
+                <h1 style={{
+                  fontSize: '2rem',
+                  fontWeight: '700',
+                  color: '#111827',
+                  marginBottom: '0.5rem'
+                }}>
+                  🗺️ Trip Management
+                </h1>
+                <p style={{ color: '#6b7280' }}>
+                  Track and manage your vehicle trips and journey analytics
+                </p>
               </div>
-            ) : trips && trips.length > 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {trips.map((trip) => (
-                  <div key={trip._id} style={{
-                    backgroundColor: '#f9fafb',
-                    padding: '1.5rem',
-                    borderRadius: '0.75rem',
-                    border: '1px solid #e5e7eb'
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                          <div style={{ fontSize: '1.125rem', fontWeight: '500', color: '#111827' }}>
-                            {trip.startLocation} → {trip.endLocation}
-                          </div>
-                          <span style={{
-                            backgroundColor: '#dbeafe',
-                            color: '#1e40af',
-                            padding: '0.125rem 0.5rem',
-                            borderRadius: '9999px',
-                            fontSize: '0.75rem',
-                            fontWeight: '500'
-                          }}>
-                            {trip.purpose || 'Personal'}
-                          </span>
-                        </div>
-                        <div style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '0.25rem' }}>
-                          {new Date(trip.date).toLocaleDateString()}
-                        </div>
-                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
-                          <span><strong>Distance:</strong> {trip.distance} km</span>
-                          <span><strong>Cost:</strong> ₹{trip.totalCost?.toFixed(2)}</span>
-                          {(trip.startOdometer || trip.endOdometer) && (
-                            <span><strong>Odometer:</strong> {trip.startOdometer || 0} → {trip.endOdometer || 0} km</span>
-                          )}
-                        </div>
-                        {trip.notes && (
-                          <div style={{ fontSize: '0.875rem', color: '#6b7280', fontStyle: 'italic' }}>
-                            {trip.notes}
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button
-                          onClick={() => handleEditTrip(trip)}
-                          style={{
-                            backgroundColor: '#3b82f6',
-                            color: 'white',
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '0.25rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '500',
-                            border: 'none',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTrip(trip._id)}
-                          style={{
-                            backgroundColor: '#ef4444',
-                            color: 'white',
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: '0.25rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '500',
-                            border: 'none',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
-                <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
-                <h3 style={{ color: '#4b5563', marginBottom: '1rem' }}>No trips recorded yet</h3>
-                <p style={{ marginBottom: '1rem' }}>Start tracking your journeys by adding your first trip.</p>
+              <div style={{
+                display: 'flex',
+                gap: '1rem',
+                alignItems: 'center'
+              }}>
+                {vehicles.length > 0 && (
+                  <select
+                    value={selectedVehicle?._id || ''}
+                    onChange={(e) => {
+                      const vehicle = vehicles.find(v => v._id === e.target.value);
+                      setSelectedVehicle(vehicle);
+                    }}
+                    style={{
+                      padding: '0.5rem 1rem',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '0.5rem',
+                      fontSize: '1rem',
+                      minWidth: '200px'
+                    }}
+                  >
+                    <option value="">Select Vehicle</option>
+                    {vehicles.map(vehicle => (
+                      <option key={vehicle._id} value={vehicle._id}>
+                        {vehicle.vehicleName}
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
-                  onClick={() => {
-                    setEditingTrip(null);
-                    setShowTripsList(false);
-                    setShowTripModal(true);
-                  }}
+                  onClick={handleAddTrip}
                   style={{
                     backgroundColor: '#10b981',
                     color: 'white',
@@ -2640,13 +2561,405 @@ const DashboardPage = () => {
                   onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
                   onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
                 >
-                  Add Your First Trip
+                  ➕ Add Trip
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
-      )}
+
+        {/* Content */}
+        <div style={{
+          maxWidth: '1200px',
+          margin: '0 auto',
+          padding: '2rem 1rem'
+        }}>
+          {vehicles.length === 0 ? (
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '0.75rem',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              padding: '3rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🚗</div>
+              <h3 style={{ color: '#4b5563', marginBottom: '1rem' }}>
+                No Vehicles Found
+              </h3>
+              <p style={{ color: '#6b7280', marginBottom: '2rem' }}>
+                Add vehicles to your garage first to start tracking trips.
+              </p>
+              <button
+                onClick={() => window.location.href = '#dashboard'}
+                style={{
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  padding: '0.75rem 1.5rem',
+                  borderRadius: '0.5rem',
+                  fontWeight: '500',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background-color 150ms ease-in-out'
+                }}
+              >
+                Go to Dashboard
+              </button>
+            </div>
+          ) : !selectedVehicle ? (
+            <div style={{
+              backgroundColor: 'white',
+              borderRadius: '0.75rem',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+              padding: '3rem',
+              textAlign: 'center'
+            }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🗺️</div>
+              <h3 style={{ color: '#4b5563', marginBottom: '1rem' }}>
+                Select a Vehicle
+              </h3>
+              <p style={{ color: '#6b7280' }}>
+                Choose a vehicle from the dropdown to view and manage its trips.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Vehicle Info and Stats */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+                gap: '1.5rem',
+                marginBottom: '2rem'
+              }}>
+                {/* Vehicle Info Card */}
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '0.75rem',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  padding: '1.5rem'
+                }}>
+                  <h3 style={{
+                    fontSize: '1.25rem',
+                    fontWeight: '700',
+                    color: '#111827',
+                    marginBottom: '1rem'
+                  }}>
+                    Current Vehicle
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '1rem'
+                  }}>
+                    <div style={{
+                      backgroundColor: '#3b82f6',
+                      color: 'white',
+                      padding: '0.75rem',
+                      borderRadius: '0.5rem',
+                      fontSize: '1.5rem'
+                    }}>
+                      🚗
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: '1.125rem',
+                        fontWeight: '600',
+                        color: '#111827'
+                      }}>
+                        {selectedVehicle.vehicleName}
+                      </div>
+                      <div style={{ color: '#6b7280' }}>
+                        {selectedVehicle.company} {selectedVehicle.model}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Trip Stats Card */}
+                <div style={{
+                  backgroundColor: 'white',
+                  borderRadius: '0.75rem',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  padding: '1.5rem'
+                }}>
+                  <h3 style={{
+                    fontSize: '1.25rem',
+                    fontWeight: '700',
+                    color: '#111827',
+                    marginBottom: '1rem'
+                  }}>
+                    Trip Statistics
+                  </h3>
+                  {tripStats ? (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '1rem'
+                    }}>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                          Total Trips
+                        </div>
+                        <div style={{
+                          fontSize: '1.5rem',
+                          fontWeight: '700',
+                          color: '#111827'
+                        }}>
+                          {tripStats.totalTrips || 0}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                          Total Distance
+                        </div>
+                        <div style={{
+                          fontSize: '1.5rem',
+                          fontWeight: '700',
+                          color: '#111827'
+                        }}>
+                          {(tripStats.totalDistance || 0).toLocaleString()} km
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                          Total Cost
+                        </div>
+                        <div style={{
+                          fontSize: '1.5rem',
+                          fontWeight: '700',
+                          color: '#111827'
+                        }}>
+                          ₹{(tripStats.totalCost || 0).toLocaleString()}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.875rem', color: '#6b7280' }}>
+                          Avg Distance
+                        </div>
+                        <div style={{
+                          fontSize: '1.5rem',
+                          fontWeight: '700',
+                          color: '#111827'
+                        }}>
+                          {tripStats.totalTrips > 0 ? (tripStats.totalDistance / tripStats.totalTrips).toFixed(1) : 0} km
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', color: '#6b7280' }}>
+                      No trip data available
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Trips List */}
+              <div style={{
+                backgroundColor: 'white',
+                borderRadius: '0.75rem',
+                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                padding: '1.5rem'
+              }}>
+                <h3 style={{
+                  fontSize: '1.25rem',
+                  fontWeight: '700',
+                  color: '#111827',
+                  marginBottom: '1.5rem'
+                }}>
+                  Trip History
+                </h3>
+
+                {tripsLoading ? (
+                  <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
+                    <div>Loading trips...</div>
+                  </div>
+                ) : trips && trips.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {trips.map((trip) => (
+                      <div key={trip._id} style={{
+                        backgroundColor: '#f9fafb',
+                        padding: '1.5rem',
+                        borderRadius: '0.75rem',
+                        border: '1px solid #e5e7eb',
+                        transition: 'transform 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.transform = 'translateY(-2px)'}
+                      onMouseOut={(e) => e.target.style.transform = 'translateY(0)'}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                              <div style={{ fontSize: '1.125rem', fontWeight: '500', color: '#111827' }}>
+                                {trip.startLocation} → {trip.endLocation}
+                              </div>
+                              <span style={{
+                                backgroundColor: '#dbeafe',
+                                color: '#1e40af',
+                                padding: '0.125rem 0.5rem',
+                                borderRadius: '9999px',
+                                fontSize: '0.75rem',
+                                fontWeight: '500'
+                              }}>
+                                {trip.purpose || 'Personal'}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '0.875rem', color: '#4b5563', marginBottom: '0.25rem' }}>
+                              {new Date(trip.date).toLocaleDateString()}
+                            </div>
+                            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.875rem', color: '#6b7280' }}>
+                              <span><strong>Distance:</strong> {trip.distance} km</span>
+                              <span><strong>Cost:</strong> ₹{trip.totalCost?.toFixed(2)}</span>
+                              {(trip.startOdometer || trip.endOdometer) && (
+                                <span><strong>Odometer:</strong> {trip.startOdometer || 0} → {trip.endOdometer || 0} km</span>
+                              )}
+                            </div>
+                            {trip.notes && (
+                              <div style={{ fontSize: '0.875rem', color: '#6b7280', fontStyle: 'italic', marginTop: '0.5rem' }}>
+                                {trip.notes}
+                              </div>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button
+                              onClick={() => handleEditTrip(trip)}
+                              style={{
+                                backgroundColor: '#3b82f6',
+                                color: 'white',
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '0.25rem',
+                                fontSize: '0.75rem',
+                                fontWeight: '500',
+                                border: 'none',
+                                cursor: 'pointer',
+                                transition: 'background-color 150ms ease-in-out'
+                              }}
+                              onMouseOver={(e) => e.target.style.backgroundColor = '#2563eb'}
+                              onMouseOut={(e) => e.target.style.backgroundColor = '#3b82f6'}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTrip(trip._id)}
+                              style={{
+                                backgroundColor: '#ef4444',
+                                color: 'white',
+                                padding: '0.25rem 0.5rem',
+                                borderRadius: '0.25rem',
+                                fontSize: '0.75rem',
+                                fontWeight: '500',
+                                border: 'none',
+                                cursor: 'pointer',
+                                transition: 'background-color 150ms ease-in-out'
+                              }}
+                              onMouseOver={(e) => e.target.style.backgroundColor = '#dc2626'}
+                              onMouseOut={(e) => e.target.style.backgroundColor = '#ef4444'}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: '#6b7280' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🗺️</div>
+                    <h3 style={{ color: '#4b5563', marginBottom: '1rem' }}>No trips recorded yet</h3>
+                    <p style={{ marginBottom: '1rem' }}>Start tracking your journeys by adding your first trip.</p>
+                    <button
+                      onClick={handleAddTrip}
+                      style={{
+                        backgroundColor: '#10b981',
+                        color: 'white',
+                        padding: '0.75rem 1.5rem',
+                        borderRadius: '0.5rem',
+                        fontWeight: '500',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'background-color 150ms ease-in-out'
+                      }}
+                      onMouseOver={(e) => e.target.style.backgroundColor = '#059669'}
+                      onMouseOut={(e) => e.target.style.backgroundColor = '#10b981'}
+                    >
+                      Add Your First Trip
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Trip Form Modal */}
+        {showTripModal && (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 1100
+            }}
+            onClick={() => {
+              setShowTripModal(false);
+              setEditingTrip(null);
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: 'white',
+                borderRadius: '1rem',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+                padding: '2rem',
+                width: '90%',
+                maxWidth: '600px',
+                maxHeight: '90vh',
+                overflowY: 'auto',
+                position: 'relative'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                style={{
+                  position: 'absolute',
+                  top: '1rem',
+                  right: '1rem',
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '1.5rem',
+                  cursor: 'pointer',
+                  color: '#6b7280'
+                }}
+                onClick={() => {
+                  setShowTripModal(false);
+                  setEditingTrip(null);
+                }}
+              >
+                ×
+              </button>
+
+              <h2 style={{ marginBottom: '1.5rem', color: '#1f2937' }}>
+                {editingTrip ? 'Edit Trip' : 'Log New Trip'}
+              </h2>
+
+              <TripForm
+                trip={editingTrip}
+                vehicles={vehicles}
+                selectedVehicle={selectedVehicle}
+                onSubmit={handleTripSubmit}
+                onCancel={() => {
+                  setShowTripModal(false);
+                  setEditingTrip(null);
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
     </>
   );
 };
@@ -4682,9 +4995,9 @@ const VehicleForm = ({ vehicle, onSuccess, onClose }) => {
 };
 
 // TripForm Component
-const TripForm = ({ trip, vehicles, onSubmit, onCancel }) => {
+const TripForm = ({ trip, vehicles, selectedVehicle, onSubmit, onCancel }) => {
   const [formData, setFormData] = useState({
-    vehicle: '',
+    vehicle: selectedVehicle?._id || '',
     date: new Date().toISOString().split('T')[0],
     startLocation: '',
     endLocation: '',
@@ -4715,6 +5028,16 @@ const TripForm = ({ trip, vehicles, onSubmit, onCancel }) => {
       });
     }
   }, [trip]);
+
+  // Update vehicle when selectedVehicle changes (for new trips)
+  React.useEffect(() => {
+    if (!trip && selectedVehicle) {
+      setFormData(prev => ({
+        ...prev,
+        vehicle: selectedVehicle._id
+      }));
+    }
+  }, [selectedVehicle, trip]);
 
   const validateForm = () => {
     const newErrors = {};
