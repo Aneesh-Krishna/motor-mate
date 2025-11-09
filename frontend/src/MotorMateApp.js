@@ -3,6 +3,38 @@ import CommunityPage from './pages/Community';
 import AnalyticsPage from './pages/Analytics';
 import './MotorMateApp.css';
 
+function getTotalFormattedCost(trips) {
+  const total = trips.reduce((sum, trip) => {
+    // Remove "₹" and commas, convert to number
+    const cost = parseFloat(trip.formattedCost.replace(/[₹,]/g, ""));
+    return sum + (isNaN(cost) ? 0 : cost);
+  }, 0);
+
+  // Return it formatted back as ₹ with 2 decimals
+  return `₹${total.toFixed(2)}`;
+}
+
+function getTotalDistance(trips) {
+  const total = trips.reduce((sum, trip) => {
+    const cost = parseFloat(trip?.distance);
+    return sum + (isNaN(cost) ? 0 : cost);
+  }, 0);
+
+  return `${total.toFixed(0)}`;
+}
+
+function getAverageDistance(trips) {
+  const total = trips.reduce((sum, trip) => {
+    const cost = parseFloat(trip?.distance);
+    return sum + (isNaN(cost) ? 0 : cost);
+  }, 0);
+
+  const average = total / trips.length;
+
+  return `${average.toFixed(0)}`;
+}
+
+
 // Main App Component
 const MotorMateApp = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -2776,7 +2808,7 @@ const TripsPage = () => {
                           fontWeight: '700',
                           color: '#111827'
                         }}>
-                          {tripStats.totalTrips || 0}
+                          {Array.isArray(trips) && trips?.length || 0}
                         </div>
                       </div>
                       <div>
@@ -2788,7 +2820,7 @@ const TripsPage = () => {
                           fontWeight: '700',
                           color: '#111827'
                         }}>
-                          {(tripStats.totalDistance || 0).toLocaleString()} km
+                          {Array.isArray(trips) ? getTotalDistance(trips) : 0 } km
                         </div>
                       </div>
                       <div>
@@ -2800,7 +2832,7 @@ const TripsPage = () => {
                           fontWeight: '700',
                           color: '#111827'
                         }}>
-                          ₹{(tripStats.totalCost || 0).toLocaleString()}
+                          {Array.isArray(trips) ? getTotalFormattedCost(trips) : '₹0'}
                         </div>
                       </div>
                       <div>
@@ -2812,7 +2844,7 @@ const TripsPage = () => {
                           fontWeight: '700',
                           color: '#111827'
                         }}>
-                          {tripStats.totalTrips > 0 ? (tripStats.totalDistance / tripStats.totalTrips).toFixed(1) : 0} km
+                          {Array.isArray(trips) ? getAverageDistance(trips) : 0} km
                         </div>
                       </div>
                     </div>
