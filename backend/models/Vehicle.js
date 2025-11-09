@@ -56,6 +56,10 @@ const VehicleSchema = new mongoose.Schema({
     type: Date,
     trim: true
   },
+  nextServiceDue: {
+    type: Date,
+    trim: true
+  },
   odometerReading: {
     type: Number,
     required: true,
