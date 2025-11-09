@@ -58,28 +58,86 @@ exports.getPosts = async (req, res) => {
       isHidden: false
     };
 
-    // Search functionality
-    if (search) {
-      query.$text = { $search: search };
+    // Handle search functionality
+    let hasSearchConditions = false;
+    if (search || author) {
+      const searchConditions = [];
+
+      // Search in title, content, and tags (only if search term is provided)
+      if (search) {
+        const searchRegex = { $regex: search, $options: 'i' };
+        searchConditions.push(
+          { title: searchRegex },
+          { content: searchRegex },
+          { tags: searchRegex }
+        );
+      }
+
+      // Handle author filter
+      if (author) {
+        const authorRegex = { $regex: author, $options: 'i' };
+        const authorUsers = await User.find({
+          $or: [
+            { username: authorRegex },
+            { firstName: authorRegex },
+            { lastName: authorRegex },
+            { email: { $regex: `^${author}@`, $options: 'i' } },
+            { email: authorRegex }
+          ]
+        }).select('_id');
+
+        if (authorUsers.length > 0) {
+          searchConditions.push({ author: { $in: authorUsers.map(u => u._id) } });
+        } else {
+          // If author filter is used but no matching author found, return no results
+          return res.json({
+            posts: [],
+            totalPages: 0,
+            currentPage: parseInt(page),
+            total: 0
+          });
+        }
+      }
+
+      // Handle search term (not author filter)
+      if (search && !author) {
+        const authorRegex = { $regex: search, $options: 'i' };
+        const authorUsers = await User.find({
+          $or: [
+            { username: authorRegex },
+            { firstName: authorRegex },
+            { lastName: authorRegex },
+            { email: { $regex: `^${search}@`, $options: 'i' } },
+            { email: authorRegex }
+          ]
+        }).select('_id');
+
+        if (authorUsers.length > 0) {
+          searchConditions.push({ author: { $in: authorUsers.map(u => u._id) } });
+        }
+      }
+
+      if (searchConditions.length > 0) {
+        query.$or = searchConditions;
+        hasSearchConditions = true;
+      }
     }
 
-    // Filter by tags
+    // Filter by tags with partial matching
     if (tags) {
       const tagArray = Array.isArray(tags) ? tags : tags.split(',');
-      query.tags = { $in: tagArray };
-    }
+      const tagConditions = tagArray.map(tag => ({ tags: { $regex: tag, $options: 'i' } }));
 
-    // Filter by author
-    if (author) {
-      // Search by username or email prefix
-      const authorUsers = await User.find({
-        $or: [
-          { username: { $regex: author, $options: 'i' } },
-          { email: { $regex: `^${author}@`, $options: 'i' } }
-        ]
-      }).select('_id');
-
-      query.author = { $in: authorUsers.map(u => u._id) };
+      if (hasSearchConditions) {
+        // Combine search and tags with $and
+        query.$and = [
+          { $or: query.$or },
+          { $or: tagConditions }
+        ];
+        delete query.$or;
+      } else {
+        query.$or = tagConditions;
+      }
     }
 
     // Filter by content length
@@ -103,48 +161,6 @@ exports.getPosts = async (req, res) => {
       sortOptions = { createdAt: order === 'desc' ? 1 : -1 };
     } else if (sort === 'short' || sort === 'contentLength') {
       // Sort by content length (shortest first)
-      const posts = await Post.aggregate([
-        { $match: query },
-        { $addFields: { contentLength: { $strLenCP: ['$content'] } } },
-        { $sort: { contentLength: order === 'asc' ? 1 : -1 } },
-        { $skip: (page - 1) * limit },
-        { $limit: limit * 1 },
-        {
-          $lookup: {
-            from: 'users',
-            localField: 'author',
-            foreignField: '_id',
-            as: 'author',
-            pipeline: [
-              { $project: { username: 1, email: 1, firstName: 1, lastName: 1, avatar: 1 } }
-            ]
-          }
-        },
-        { $unwind: '$author' },
-        {
-          $lookup: {
-            from: 'trips',
-            localField: 'linkedTrip',
-            foreignField: '_id',
-            as: 'linkedTrip',
-            pipeline: [
-              { $project: { title: 1, destination: 1, startDate: 1 } }
-            ]
-          }
-        },
-        { $unwind: { path: '$linkedTrip', preserveNullAndEmptyArrays: true } }
-      ]);
-
-      const total = await Post.countDocuments(query);
-
-      return res.json({
-        posts,
-        totalPages: Math.ceil(total / limit),
-        currentPage: page,
-        total
-      });
-    } else if (sort === 'long') {
-      // Sort by content length (longest first)
       const posts = await Post.aggregate([
         { $match: query },
         { $addFields: { contentLength: { $strLenCP: ['$content'] } } },
@@ -182,12 +198,99 @@ exports.getPosts = async (req, res) => {
       return res.json({
         posts,
         totalPages: Math.ceil(total / limit),
-        currentPage: page,
+        currentPage: parseInt(page),
+        total
+      });
+    } else if (sort === 'long') {
+      // Sort by content length (longest first)
+      const posts = await Post.aggregate([
+        { $match: query },
+        { $addFields: { contentLength: { $strLenCP: ['$content'] } } },
+        { $sort: { contentLength: order === 'asc' ? 1 : -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit * 1 },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'author',
+            foreignField: '_id',
+            as: 'author',
+            pipeline: [
+              { $project: { username: 1, email: 1, firstName: 1, lastName: 1, avatar: 1 } }
+            ]
+          }
+        },
+        { $unwind: '$author' },
+        {
+          $lookup: {
+            from: 'trips',
+            localField: 'linkedTrip',
+            foreignField: '_id',
+            as: 'linkedTrip',
+            pipeline: [
+              { $project: { title: 1, destination: 1, startDate: 1 } }
+            ]
+          }
+        },
+        { $unwind: { path: '$linkedTrip', preserveNullAndEmptyArrays: true } }
+      ]);
+
+      const total = await Post.countDocuments(query);
+
+      return res.json({
+        posts,
+        totalPages: Math.ceil(total / limit),
+        currentPage: parseInt(page),
         total
       });
     } else if (sort === 'likes') {
-      // Sort by likes count using aggregation
-      sortOptions = { likesCount: order === 'desc' ? -1 : 1 };
+      // Sort by likes count using aggregation with secondary sort by creation date
+      const posts = await Post.aggregate([
+        { $match: query },
+        { $addFields: {
+            likesCount: { $size: { $ifNull: ['$likes', []] } },
+            createdAt: '$createdAt'
+        }},
+        { $sort: {
+            likesCount: order === 'desc' ? -1 : 1,
+            createdAt: order === 'desc' ? -1 : 1
+        }},
+        { $skip: (page - 1) * limit },
+        { $limit: limit * 1 },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'author',
+            foreignField: '_id',
+            as: 'author',
+            pipeline: [
+              { $project: { username: 1, email: 1, firstName: 1, lastName: 1, avatar: 1 } }
+            ]
+          }
+        },
+        { $unwind: '$author' },
+        {
+          $lookup: {
+            from: 'trips',
+            localField: 'linkedTrip',
+            foreignField: '_id',
+            as: 'linkedTrip',
+            pipeline: [
+              { $project: { title: 1, destination: 1, startDate: 1 } }
+            ]
+          }
+        },
+        { $unwind: { path: '$linkedTrip', preserveNullAndEmptyArrays: true } }
+      ]);
+
+      const total = await Post.countDocuments(query);
+
+      return res.json({
+        posts,
+        totalPages: Math.ceil(total / limit),
+        currentPage: parseInt(page),
+        total
+      });
     }
 
     const posts = await Post.find(query)
