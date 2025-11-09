@@ -3,6 +3,37 @@ import CommunityPage from './pages/Community';
 import AnalyticsPage from './pages/Analytics';
 import './MotorMateAppMobile.css';
 
+function getTotalFormattedCost(trips) {
+  const total = trips.reduce((sum, trip) => {
+    // Remove "₹" and commas, convert to number
+    const cost = parseFloat(trip.formattedCost.replace(/[₹,]/g, ""));
+    return sum + (isNaN(cost) ? 0 : cost);
+  }, 0);
+
+  // Return it formatted back as ₹ with 2 decimals
+  return `₹${total.toFixed(2)}`;
+}
+
+function getTotalDistance(trips) {
+  const total = trips.reduce((sum, trip) => {
+    const cost = parseFloat(trip?.distance);
+    return sum + (isNaN(cost) ? 0 : cost);
+  }, 0);
+
+  return `${total.toFixed(0)}`;
+}
+
+function getAverageDistance(trips) {
+  const total = trips.reduce((sum, trip) => {
+    const cost = parseFloat(trip?.distance);
+    return sum + (isNaN(cost) ? 0 : cost);
+  }, 0);
+
+  const average = total / trips.length;
+
+  return `${average.toFixed(0)}`;
+}
+
 // Mobile-Optimized MotorMate App Component
 const MotorMateAppMobile = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -1482,18 +1513,969 @@ const MobileExpensesListModal = ({ expenses, vehicle, loading, onClose, onEditEx
   );
 };
 
-const TripsPageMobile = () => (
-  <div className="mobile-page-placeholder">
-    <h2>Trips</h2>
-    <p>Mobile-optimized trips page coming soon...</p>
-  </div>
-);
+// Mobile Trips Page Component with Full Functionality
+const TripsPageMobile = () => {
+  const [vehicles, setVehicles] = useState([]);
+  const [selectedVehicle, setSelectedVehicle] = useState(null);
+  const [trips, setTrips] = useState([]);
+  const [tripStats, setTripStats] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [tripsLoading, setTripsLoading] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-const ProfilePageMobile = () => (
-  <div className="mobile-page-placeholder">
-    <h2>Profile</h2>
-    <p>Mobile-optimized profile page coming soon...</p>
-  </div>
-);
+  // Modal states
+  const [showTripModal, setShowTripModal] = useState(false);
+  const [editingTrip, setEditingTrip] = useState(null);
+
+  // API call function
+  const apiCall = async (endpoint, options = {}) => {
+    const token = localStorage.getItem('token');
+    const url = `http://localhost:5000/api${endpoint}`;
+
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers
+      },
+      ...options
+    };
+
+    try {
+      const response = await fetch(url, config);
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.reload();
+        }
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('API call failed:', error);
+      throw error;
+    }
+  };
+
+  // Load vehicles on component mount
+  useEffect(() => {
+    localStorage.setItem('currentPage', 'trips');
+    fetchVehicles();
+  }, []);
+
+  // Load trips and stats when vehicle is selected
+  useEffect(() => {
+    if (selectedVehicle) {
+      fetchTrips(selectedVehicle._id);
+      fetchTripStats(selectedVehicle._id);
+    } else {
+      setTrips([]);
+      setTripStats(null);
+    }
+  }, [selectedVehicle]);
+
+  const fetchVehicles = async () => {
+    try {
+      setLoading(true);
+      const response = await apiCall('/vehicles');
+      setVehicles(response.data);
+      if (!selectedVehicle && response.data.length > 0) {
+        setSelectedVehicle(response.data[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching vehicles:', error);
+      setErrorMessage('Error fetching vehicles: ' + error.message);
+      setTimeout(() => setErrorMessage(''), 3000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchTrips = async (vehicleId) => {
+    try {
+      setTripsLoading(true);
+      const endpoint = vehicleId ? `/trips?vehicle=${vehicleId}` : '/trips';
+      const response = await apiCall(endpoint);
+      setTrips(response.data || []);
+    } catch (error) {
+      console.error('Error fetching trips:', error);
+      setErrorMessage('Failed to fetch trips: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  const fetchTripStats = async (vehicleId) => {
+    try {
+      const response = await apiCall(`/trips/stats/${vehicleId}`);
+      setTripStats(response.data);
+    } catch (error) {
+      console.error('Error fetching trip stats:', error);
+      setTripStats(null);
+    }
+  };
+
+  const handleTripSubmit = async (tripData) => {
+    try {
+      setTripsLoading(true);
+      if (editingTrip) {
+        const response = await apiCall(`/trips/${editingTrip._id}`, {
+          method: 'PUT',
+          body: JSON.stringify(tripData)
+        });
+        const updatedTrips = trips.map(t =>
+          t._id === editingTrip._id ? response.data : t
+        );
+        setTrips(updatedTrips);
+        setSuccessMessage('Trip updated successfully!');
+      } else {
+        const response = await apiCall('/trips', {
+          method: 'POST',
+          body: JSON.stringify(tripData)
+        });
+        setTrips([response.data, ...trips]);
+        setSuccessMessage('Trip added successfully!');
+      }
+      setShowTripModal(false);
+      setEditingTrip(null);
+      if (selectedVehicle) {
+        fetchTripStats(selectedVehicle._id);
+      }
+      setTimeout(() => setSuccessMessage(''), 3000);
+    } catch (error) {
+      console.error('Error saving trip:', error);
+      setErrorMessage('Failed to save trip: ' + (error.message || 'Unknown error'));
+      setTimeout(() => setErrorMessage(''), 5000);
+    } finally {
+      setTripsLoading(false);
+    }
+  };
+
+  const handleDeleteTrip = async (tripId) => {
+    if (window.confirm('Are you sure you want to delete this trip?')) {
+      try {
+        setTripsLoading(true);
+        await apiCall(`/trips/${tripId}`, {
+          method: 'DELETE'
+        });
+        const updatedTrips = trips.filter(t => t._id !== tripId);
+        setTrips(updatedTrips);
+        setSuccessMessage('Trip deleted successfully!');
+        if (selectedVehicle) {
+          fetchTripStats(selectedVehicle._id);
+        }
+        setTimeout(() => setSuccessMessage(''), 3000);
+      } catch (error) {
+        console.error('Error deleting trip:', error);
+        setErrorMessage('Failed to delete trip: ' + error.message);
+        setTimeout(() => setErrorMessage(''), 3000);
+      } finally {
+        setTripsLoading(false);
+      }
+    }
+  };
+
+  const handleEditTrip = (trip) => {
+    setEditingTrip(trip);
+    setShowTripModal(true);
+  };
+
+  const handleAddTrip = () => {
+    if (!selectedVehicle) {
+      setErrorMessage('Please select a vehicle first');
+      setTimeout(() => setErrorMessage(''), 3000);
+      return;
+    }
+    setEditingTrip(null);
+    setShowTripModal(true);
+  };
+
+  const displayMessage = () => {
+    if (successMessage) {
+      return (
+        <div className="mobile-toast mobile-toast-success">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+          </svg>
+          <span>{successMessage}</span>
+        </div>
+      );
+    }
+    if (errorMessage) {
+      return (
+        <div className="mobile-toast mobile-toast-error">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>{errorMessage}</span>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <>
+      {displayMessage()}
+      <div className="mobile-trips">
+        {/* Header */}
+        <div className="mobile-trips-header">
+          <div className="mobile-trips-title">
+            <h1>🗺️ Trip Management</h1>
+            <p>Track your journeys and analytics</p>
+          </div>
+          <button
+            onClick={handleAddTrip}
+            className="mobile-fab-button"
+            aria-label="Add trip"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 5v14m-7-7h14"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Vehicle Selector */}
+        {vehicles.length > 1 && (
+          <div className="mobile-vehicle-selector">
+            <label className="mobile-selector-label">Select Vehicle:</label>
+            <select
+              value={selectedVehicle?._id || ''}
+              onChange={(e) => {
+                const vehicle = vehicles.find(v => v._id === e.target.value);
+                setSelectedVehicle(vehicle);
+              }}
+              className="mobile-selector"
+            >
+              {vehicles.map(vehicle => (
+                <option key={vehicle._id} value={vehicle._id}>
+                  {vehicle.vehicleName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {vehicles.length === 0 ? (
+          <div className="mobile-empty-state">
+            <div className="mobile-empty-icon">🚗</div>
+            <h2>No Vehicles Found</h2>
+            <p>Add vehicles to your garage first to start tracking trips</p>
+            <button
+              onClick={() => window.location.href = '#dashboard'}
+              className="mobile-primary-button"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        ) : !selectedVehicle ? (
+          <div className="mobile-empty-state">
+            <div className="mobile-empty-icon">🗺️</div>
+            <h2>Select a Vehicle</h2>
+            <p>Choose a vehicle to view and manage its trips</p>
+          </div>
+        ) : (
+          <>
+            {/* Current Vehicle Card */}
+            <div className="mobile-current-vehicle-card">
+              <div className="mobile-current-vehicle-info">
+                <div className="mobile-current-vehicle-icon">🚗</div>
+                <div>
+                  <h3>{selectedVehicle.vehicleName}</h3>
+                  <p>{selectedVehicle.company} {selectedVehicle.model}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Trip Statistics */}
+            {tripStats && (
+              <div className="mobile-trip-stats">
+                <h3>Trip Statistics</h3>
+                <div className="mobile-stats-grid">
+                  <div className="mobile-stat-card">
+                    <span className="mobile-stat-number">{Array.isArray(trips) && trips?.length || 0}</span>
+                    <span className="mobile-stat-label">Total Trips</span>
+                  </div>
+                  <div className="mobile-stat-card">
+                    <span className="mobile-stat-number">{Array.isArray(trips) ? getTotalDistance(trips) : 0 }</span>
+                    <span className="mobile-stat-label">Distance (km)</span>
+                  </div>
+                  <div className="mobile-stat-card">
+                    <span className="mobile-stat-number">{Array.isArray(trips) ? getTotalFormattedCost(trips) : '₹0'}</span>
+                    <span className="mobile-stat-label">Total Cost</span>
+                  </div>
+                  <div className="mobile-stat-card">
+                    <span className="mobile-stat-number">
+                      {Array.isArray(trips) ? getAverageDistance(trips) : 0} km
+                    </span>
+                    <span className="mobile-stat-label">Avg Distance</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Trips List */}
+            <div className="mobile-trips-list">
+              <div className="mobile-section-header">
+                <h3>Trip History</h3>
+              </div>
+
+              {tripsLoading ? (
+                <div className="mobile-loading-spinner">Loading trips...</div>
+              ) : trips && trips.length > 0 ? (
+                <div className="mobile-trips-container">
+                  {trips.map((trip) => (
+                    <div key={trip._id} className="mobile-trip-card">
+                      <div className="mobile-trip-header">
+                        <div className="mobile-trip-route">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                          </svg>
+                          <span>{trip.startLocation} → {trip.endLocation}</span>
+                        </div>
+                        <span className="mobile-trip-purpose">
+                          {trip.purpose || 'Personal'}
+                        </span>
+                      </div>
+                      <div className="mobile-trip-details">
+                        <div className="mobile-trip-date">
+                          {new Date(trip.date).toLocaleDateString()}
+                        </div>
+                        <div className="mobile-trip-metrics">
+                          <div className="mobile-trip-metric">
+                            <span className="mobile-metric-label">Distance</span>
+                            <span className="mobile-metric-value">{trip.distance} km</span>
+                          </div>
+                          <div className="mobile-trip-metric">
+                            <span className="mobile-metric-label">Cost</span>
+                            <span className="mobile-metric-value">₹{trip.totalCost?.toFixed(2)}</span>
+                          </div>
+                          {(trip.startOdometer || trip.endOdometer) && (
+                            <div className="mobile-trip-metric">
+                              <span className="mobile-metric-label">Odometer</span>
+                              <span className="mobile-metric-value">
+                                {trip.startOdometer || 0} → {trip.endOdometer || 0} km
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                        {trip.notes && (
+                          <div className="mobile-trip-notes">
+                            <strong>Notes:</strong> {trip.notes}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mobile-trip-actions">
+                        <button
+                          onClick={() => handleEditTrip(trip)}
+                          className="mobile-action-button mobile-action-primary"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTrip(trip._id)}
+                          className="mobile-action-button mobile-action-danger"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18m-2 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                          </svg>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mobile-empty-state">
+                  <div className="mobile-empty-icon">🗺️</div>
+                  <h2>No trips recorded yet</h2>
+                  <p>Start tracking your journeys by adding your first trip</p>
+                  <button
+                    onClick={handleAddTrip}
+                    className="mobile-primary-button"
+                  >
+                    Add Your First Trip
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Trip Modal */}
+        {showTripModal && (
+          <MobileTripFormModal
+            trip={editingTrip}
+            vehicle={selectedVehicle}
+            userVehicles={vehicles}
+            onClose={() => {
+              setShowTripModal(false);
+              setEditingTrip(null);
+            }}
+            onSuccess={handleTripSubmit}
+          />
+        )}
+      </div>
+    </>
+  );
+};
+
+// Mobile Trip Form Modal
+const MobileTripFormModal = ({ trip, vehicle, userVehicles, onClose, onSuccess }) => {
+  const [formData, setFormData] = useState({
+    vehicle: vehicle?._id || '',
+    startLocation: '',
+    endLocation: '',
+    date: new Date().toISOString().split('T')[0],
+    distance: '',
+    totalCost: '',
+    purpose: 'Personal',
+    startOdometer: '',
+    endOdometer: '',
+    notes: '',
+    fuelConsumed: '',
+    tripType: 'City'
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (trip) {
+      setFormData({
+        vehicle: trip.vehicle?._id || vehicle?._id || '',
+        startLocation: trip.startLocation || '',
+        endLocation: trip.endLocation || '',
+        date: trip.date ? new Date(trip.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        distance: trip.distance || '',
+        totalCost: trip.totalCost || '',
+        purpose: trip.purpose || 'Personal',
+        startOdometer: trip.startOdometer || '',
+        endOdometer: trip.endOdometer || '',
+        notes: trip.notes || '',
+        fuelConsumed: trip.fuelConsumed || '',
+        tripType: trip.tripType || 'City'
+      });
+    } else if (vehicle) {
+      setFormData({
+        ...formData,
+        vehicle: vehicle._id,
+        startOdometer: vehicle.odometerReading || ''
+      });
+    }
+  }, [trip, vehicle]);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await onSuccess(formData);
+      onClose();
+    } catch (error) {
+      console.error('Error saving trip:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="mobile-modal-overlay" onClick={onClose}>
+      <div className="mobile-modal-content mobile-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="mobile-modal-header">
+          <h2>{trip ? 'Edit Trip' : 'Log New Trip'}</h2>
+          <button onClick={onClose} className="mobile-modal-close">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="mobile-form">
+          <div className="mobile-form-group">
+            <label>Start Location *</label>
+            <input
+              type="text"
+              value={formData.startLocation}
+              onChange={(e) => setFormData({...formData, startLocation: e.target.value})}
+              required
+              placeholder="e.g., Home"
+            />
+          </div>
+          <div className="mobile-form-group">
+            <label>End Location *</label>
+            <input
+              type="text"
+              value={formData.endLocation}
+              onChange={(e) => setFormData({...formData, endLocation: e.target.value})}
+              required
+              placeholder="e.g., Office"
+            />
+          </div>
+          <div className="mobile-form-row">
+            <div className="mobile-form-group">
+              <label>Date *</label>
+              <input
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData({...formData, date: e.target.value})}
+                required
+              />
+            </div>
+            <div className="mobile-form-group">
+              <label>Purpose</label>
+              <select
+                value={formData.purpose}
+                onChange={(e) => setFormData({...formData, purpose: e.target.value})}
+              >
+                <option value="Personal">Personal</option>
+                <option value="Business">Business</option>
+                <option value="Commute">Commute</option>
+                <option value="Leisure">Leisure</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+          <div className="mobile-form-row">
+            <div className="mobile-form-group">
+              <label>Distance (km) *</label>
+              <input
+                type="number"
+                step="0.1"
+                value={formData.distance}
+                onChange={(e) => setFormData({...formData, distance: e.target.value})}
+                required
+                placeholder="25.5"
+              />
+            </div>
+            <div className="mobile-form-group">
+              <label>Total Cost (₹) *</label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.totalCost}
+                onChange={(e) => setFormData({...formData, totalCost: e.target.value})}
+                required
+                placeholder="500.00"
+              />
+            </div>
+          </div>
+          <div className="mobile-form-row">
+            <div className="mobile-form-group">
+              <label>Start Odometer (km)</label>
+              <input
+                type="number"
+                value={formData.startOdometer}
+                onChange={(e) => setFormData({...formData, startOdometer: e.target.value})}
+                placeholder="15000"
+              />
+            </div>
+            <div className="mobile-form-group">
+              <label>End Odometer (km)</label>
+              <input
+                type="number"
+                value={formData.endOdometer}
+                onChange={(e) => setFormData({...formData, endOdometer: e.target.value})}
+                placeholder="15025"
+              />
+            </div>
+          </div>
+          <div className="mobile-form-row">
+            <div className="mobile-form-group">
+              <label>Fuel Consumed (L)</label>
+              <input
+                type="number"
+                step="0.1"
+                value={formData.fuelConsumed}
+                onChange={(e) => setFormData({...formData, fuelConsumed: e.target.value})}
+                placeholder="5.2"
+              />
+            </div>
+            <div className="mobile-form-group">
+              <label>Trip Type</label>
+              <select
+                value={formData.tripType}
+                onChange={(e) => setFormData({...formData, tripType: e.target.value})}
+              >
+                <option value="City">City</option>
+                <option value="Highway">Highway</option>
+                <option value="Mixed">Mixed</option>
+              </select>
+            </div>
+          </div>
+          <div className="mobile-form-group">
+            <label>Notes (optional)</label>
+            <textarea
+              value={formData.notes}
+              onChange={(e) => setFormData({...formData, notes: e.target.value})}
+              rows={3}
+              placeholder="Additional notes about this trip"
+            />
+          </div>
+          <button type="submit" className="mobile-form-submit" disabled={loading}>
+            {loading ? 'Saving...' : (trip ? 'Update Trip' : 'Add Trip')}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// Mobile Profile Page Component with User Management
+const ProfilePageMobile = () => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    phoneNumber: '',
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: ''
+    }
+  });
+  const [userData, setUserData] = useState(null);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  useEffect(() => {
+    // Load user data from localStorage
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        setUserData(user);
+        setFormData({
+          firstName: user.firstName || '',
+          lastName: user.lastName || '',
+          phoneNumber: user.phoneNumber || '',
+          address: user.address || {
+            street: '',
+            city: '',
+            state: '',
+            zipCode: '',
+            country: ''
+          }
+        });
+      } catch (e) {
+        console.error('Error parsing user data:', e);
+      }
+    }
+  }, []);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name.startsWith('address.')) {
+      const addressField = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [addressField]: value
+        }
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const updatedUser = {
+        ...userData,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        phoneNumber: formData.phoneNumber,
+        address: formData.address
+      };
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+      setUserData(updatedUser);
+      setSuccessMessage('Profile updated successfully!');
+      setIsEditing(false);
+      setTimeout(() => setSuccessMessage(''), 5000);
+    } catch (error) {
+      setErrorMessage('Failed to update profile. Please try again.');
+      setTimeout(() => setErrorMessage(''), 5000);
+    }
+  };
+
+  const handleCancel = () => {
+    if (userData) {
+      setFormData({
+        firstName: userData.firstName || '',
+        lastName: userData.lastName || '',
+        phoneNumber: userData.phoneNumber || '',
+        address: userData.address || {
+          street: '',
+          city: '',
+          state: '',
+          zipCode: '',
+          country: ''
+        }
+      });
+    }
+    setIsEditing(false);
+    setSuccessMessage('');
+    setErrorMessage('');
+  };
+
+  const displayName = `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || userData?.username || 'User';
+
+  if (!userData) {
+    return (
+      <div className="mobile-loading-screen">
+        <div className="mobile-loading-content">
+          <div className="mobile-loading-spinner"></div>
+          <p>Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {successMessage && (
+        <div className="mobile-toast mobile-toast-success">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+          </svg>
+          <span>{successMessage}</span>
+        </div>
+      )}
+      {errorMessage && (
+        <div className="mobile-toast mobile-toast-error">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <span>{errorMessage}</span>
+        </div>
+      )}
+      <div className="mobile-profile">
+        {/* Profile Header */}
+        {/* <div className="mobile-profile-header">
+          <div className="mobile-profile-avatar">
+            <span>{displayName.charAt(0).toUpperCase()}</span>
+          </div>
+          <div className="mobile-profile-info">
+            <h2>{displayName}</h2>
+            <p>{userData?.email || 'user@example.com'}</p>
+            {userData?.authMethod === 'google' && (
+              <span className="mobile-profile-badge">🔐 Google SSO</span>
+            )}
+          </div>
+          <button
+            onClick={() => isEditing ? handleSubmit() : setIsEditing(true)}
+            className="mobile-profile-edit-btn"
+          >
+            {isEditing ? '💾 Save' : '✏️ Edit'}
+          </button>
+        </div> */}
+
+        {/* Profile Content */}
+        <div className="mobile-profile-content">
+          {isEditing ? (
+            <form onSubmit={handleSubmit} className="mobile-profile-form">
+              <div className="mobile-form-group">
+                <label>First Name</label>
+                <input
+                  type="text"
+                  name="firstName"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  placeholder="John"
+                />
+              </div>
+              <div className="mobile-form-group">
+                <label>Last Name</label>
+                <input
+                  type="text"
+                  name="lastName"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  placeholder="Doe"
+                />
+              </div>
+              <div className="mobile-form-group">
+                <label>Phone Number</label>
+                <input
+                  type="tel"
+                  name="phoneNumber"
+                  value={formData.phoneNumber}
+                  onChange={handleChange}
+                  placeholder="+91 98765 43210"
+                />
+              </div>
+              <div className="mobile-form-section">
+                <h3>Address Information</h3>
+                <div className="mobile-form-group">
+                  <label>Street Address</label>
+                  <input
+                    type="text"
+                    name="address.street"
+                    value={formData.address.street}
+                    onChange={handleChange}
+                    placeholder="123 Main Street"
+                  />
+                </div>
+                <div className="mobile-form-row">
+                  <div className="mobile-form-group">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      name="address.city"
+                      value={formData.address.city}
+                      onChange={handleChange}
+                      placeholder="Mumbai"
+                    />
+                  </div>
+                  <div className="mobile-form-group">
+                    <label>State</label>
+                    <input
+                      type="text"
+                      name="address.state"
+                      value={formData.address.state}
+                      onChange={handleChange}
+                      placeholder="Maharashtra"
+                    />
+                  </div>
+                </div>
+                <div className="mobile-form-row">
+                  <div className="mobile-form-group">
+                    <label>ZIP Code</label>
+                    <input
+                      type="text"
+                      name="address.zipCode"
+                      value={formData.address.zipCode}
+                      onChange={handleChange}
+                      placeholder="400001"
+                    />
+                  </div>
+                  <div className="mobile-form-group">
+                    <label>Country</label>
+                    <input
+                      type="text"
+                      name="address.country"
+                      value={formData.address.country}
+                      onChange={handleChange}
+                      placeholder="India"
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="mobile-profile-actions">
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="mobile-cancel-button"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="mobile-save-button"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="mobile-profile-view">
+              {/* Personal Information */}
+              <div className="mobile-profile-section">
+                <h3>Personal Information</h3>
+                <div className="mobile-profile-item">
+                  <span>Name</span>
+                  <span>{displayName || 'Not provided'}</span>
+                </div>
+                <div className="mobile-profile-item">
+                  <span>Email</span>
+                  <span>{userData?.email || 'Not provided'}</span>
+                </div>
+                <div className="mobile-profile-item">
+                  <span>Phone</span>
+                  <span>{formData.phoneNumber || 'Not provided'}</span>
+                </div>
+              </div>
+
+              {/* Address Information */}
+              <div className="mobile-profile-section">
+                <h3>Address</h3>
+                {formData.address.street || formData.address.city ? (
+                  <div className="mobile-profile-item">
+                    <span>Address</span>
+                    <span>
+                      {[formData.address.street, formData.address.city, formData.address.state, formData.address.zipCode, formData.address.country]
+                        .filter(Boolean)
+                        .join(', ') || 'Not provided'}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="mobile-profile-item">
+                    <span>Address</span>
+                    <span>Not provided</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Account Information */}
+              <div className="mobile-profile-section">
+                <h3>Account</h3>
+                <div className="mobile-profile-item">
+                  <span>Member Since</span>
+                  <span>{new Date(userData?.createdAt || Date.now()).toLocaleDateString()}</span>
+                </div>
+                <div className="mobile-profile-item">
+                  <span>Login Method</span>
+                  <span>Google Sign-In</span>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              {/* <div className="mobile-profile-actions">
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="mobile-primary-button"
+                >
+                  Edit Profile
+                </button>
+                <button
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to logout?')) {
+                      localStorage.removeItem('token');
+                      localStorage.removeItem('user');
+                      localStorage.removeItem('currentPage');
+                      window.location.reload();
+                    }
+                  }}
+                  className="mobile-logout-button"
+                >
+                  Logout
+                </button>
+              </div> */}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+};
 
 export default MotorMateAppMobile;

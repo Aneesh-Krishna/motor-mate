@@ -1474,6 +1474,307 @@ body {
   line-height: 1.5;
 }
 
+/* Trips Page Styles */
+.mobile-trips {
+  padding: 1rem;
+}
+
+.mobile-trips-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+}
+
+.mobile-trips-title h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.mobile-trips-title p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.mobile-current-vehicle-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+}
+
+.mobile-current-vehicle-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mobile-current-vehicle-icon {
+  font-size: 2rem;
+}
+
+.mobile-current-vehicle-info h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.mobile-current-vehicle-info p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.mobile-trip-stats {
+  margin-bottom: 2rem;
+}
+
+.mobile-trip-stats h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 1rem;
+}
+
+.mobile-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.mobile-stat-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1rem;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+}
+
+.mobile-stat-number {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.mobile-stat-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.mobile-trips-list {
+  margin-top: 2rem;
+}
+
+.mobile-trips-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mobile-trip-card {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e7eb;
+}
+
+.mobile-trip-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.mobile-trip-route {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.mobile-trip-purpose {
+  background: #eff6ff;
+  color: #3b82f6;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mobile-trip-details {
+  margin-bottom: 1rem;
+}
+
+.mobile-trip-date {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.mobile-trip-metrics {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.mobile-trip-metric {
+  flex: 1;
+}
+
+.mobile-metric-label {
+  display: block;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.mobile-metric-value {
+  font-weight: 600;
+  color: #111827;
+}
+
+.mobile-trip-notes {
+  font-size: 0.875rem;
+  color: #6b7280;
+  background: #f9fafb;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+}
+
+.mobile-trip-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+/* Profile Page Styles */
+.mobile-profile {
+  padding: 1rem;
+}
+
+.mobile-profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: white;
+  border-radius: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.mobile-profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.mobile-profile-info {
+  flex: 1;
+}
+
+.mobile-profile-info h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #111827;
+}
+
+.mobile-profile-info p {
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.mobile-profile-badge {
+  display: inline-block;
+  margin-top: 0.5rem;
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.mobile-profile-edit-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mobile-profile-content {
+  background: white;
+  border-radius: 1rem;
+  padding: 1.5rem;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.mobile-profile-section {
+  margin-bottom: 2rem;
+}
+
+.mobile-profile-section h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0.5rem;
+}
+
+.mobile-profile-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.mobile-profile-item span:first-child {
+  color: #6b7280;
+}
+
+.mobile-profile-item span:last-child {
+  font-weight: 600;
+  color: #111827;
+  text-align: right;
+}
+
+.mobile-profile-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.mobile-logout-button {
+  flex: 1;
+  padding: 1rem;
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  border-radius: 0.5rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 /* Touch Optimizations */
 @media (hover: none) {
   .mobile-menu-item:hover,
