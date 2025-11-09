@@ -33,6 +33,9 @@ const Analytics = () => {
   const [vehicleAnalytics, setVehicleAnalytics] = useState(null);
   const [comparativeData, setComparativeData] = useState(null);
   const [fuelPriceData, setFuelPriceData] = useState(null);
+  const [tripAnalyticsData, setTripAnalyticsData] = useState(null);
+  const [vehicleTripAnalytics, setVehicleTripAnalytics] = useState(null);
+  const [comparativeTripData, setComparativeTripData] = useState(null);
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState('');
   const [loading, setLoading] = useState(true);
@@ -89,6 +92,32 @@ const Analytics = () => {
         setFuelPriceData(fuelData);
       }
 
+      // Fetch trip analytics
+      const tripResponse = await fetch(
+        `http://localhost:5000/api/analytics/trips?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (tripResponse.ok) {
+        const tripData = await tripResponse.json();
+        setTripAnalyticsData(tripData);
+      }
+
+      // Fetch comparative trip analytics
+      const comparativeTripResponse = await fetch(
+        `http://localhost:5000/api/analytics/trips/comparative?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (comparativeTripResponse.ok) {
+        const compTripData = await comparativeTripResponse.json();
+        setComparativeTripData(compTripData);
+      }
+
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -121,6 +150,30 @@ const Analytics = () => {
     }
   };
 
+  const fetchVehicleTripAnalytics = async (vehicleId) => {
+    if (!vehicleId) return;
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(
+        `http://localhost:5000/api/analytics/trips/vehicle/${vehicleId}?startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch vehicle trip analytics');
+      const data = await response.json();
+      setVehicleTripAnalytics(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchAnalyticsData();
   }, [dateRange]);
@@ -128,6 +181,7 @@ const Analytics = () => {
   useEffect(() => {
     if (selectedVehicle) {
       fetchVehicleAnalytics(selectedVehicle);
+      fetchVehicleTripAnalytics(selectedVehicle);
       setActiveTab('vehicle');
     }
   }, [selectedVehicle]);
@@ -252,6 +306,141 @@ const Analytics = () => {
     ]
   };
 
+  // Trip analytics charts
+  const monthlyTripsChart = {
+    labels: tripAnalyticsData?.monthlyTrips?.map(m => {
+      const date = new Date(m.month + '-01');
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }) || [],
+    datasets: [
+      {
+        label: 'Number of Trips',
+        data: tripAnalyticsData?.monthlyTrips?.map(m => m.tripCount) || [],
+        backgroundColor: 'rgba(99, 102, 241, 0.8)',
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 1,
+        yAxisID: 'y'
+      },
+      {
+        label: 'Total Distance (km)',
+        data: tripAnalyticsData?.monthlyTrips?.map(m => m.totalDistance) || [],
+        backgroundColor: 'rgba(34, 197, 94, 0.8)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1,
+        yAxisID: 'y1'
+      }
+    ]
+  };
+
+  const tripPurposeChart = {
+    labels: Object.keys(tripAnalyticsData?.purposeBreakdown || {}),
+    datasets: [
+      {
+        data: Object.values(tripAnalyticsData?.purposeBreakdown || {}).map(p => p.tripCount),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(251, 146, 60, 0.8)',
+          'rgba(147, 51, 234, 0.8)',
+          'rgba(236, 72, 153, 0.8)',
+          'rgba(245, 158, 11, 0.8)'
+        ],
+        borderColor: [
+          'rgba(59, 130, 246, 1)',
+          'rgba(16, 185, 129, 1)',
+          'rgba(251, 146, 60, 1)',
+          'rgba(147, 51, 234, 1)',
+          'rgba(236, 72, 153, 1)',
+          'rgba(245, 158, 11, 1)'
+        ],
+        borderWidth: 1,
+      }
+    ]
+  };
+
+  const vehicleTripComparisonChart = {
+    labels: comparativeTripData?.vehicles?.map(v => v.vehicle.name) || [],
+    datasets: [
+      {
+        label: 'Total Trips',
+        data: comparativeTripData?.vehicles?.map(v => v.totalTrips) || [],
+        backgroundColor: 'rgba(99, 102, 241, 0.8)',
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'Total Distance (km)',
+        data: comparativeTripData?.vehicles?.map(v => v.totalDistance) || [],
+        backgroundColor: 'rgba(34, 197, 94, 0.8)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1,
+      }
+    ]
+  };
+
+  const vehicleTripDistanceChart = {
+    labels: vehicleTripAnalytics?.monthlyTrips?.map(m => {
+      const date = new Date(m.month + '-01');
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }) || [],
+    datasets: [
+      {
+        label: 'Total Distance (km)',
+        data: vehicleTripAnalytics?.monthlyTrips?.map(m => m.totalDistance) || [],
+        backgroundColor: 'rgba(34, 197, 94, 0.8)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'Number of Trips',
+        data: vehicleTripAnalytics?.monthlyTrips?.map(m => m.tripCount) || [],
+        backgroundColor: 'rgba(99, 102, 241, 0.8)',
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 1,
+      }
+    ]
+  };
+
+  const vehicleTripPurposeChart = {
+    labels: Object.keys(vehicleTripAnalytics?.purposeBreakdown || {}),
+    datasets: [
+      {
+        data: Object.values(vehicleTripAnalytics?.purposeBreakdown || {}).map(p => p.tripCount),
+        backgroundColor: [
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(251, 146, 60, 0.8)',
+          'rgba(147, 51, 234, 0.8)',
+          'rgba(236, 72, 153, 0.8)',
+          'rgba(245, 158, 11, 0.8)'
+        ],
+        borderWidth: 1,
+      }
+    ]
+  };
+
+  const seasonalTripChart = {
+    labels: Object.keys(vehicleTripAnalytics?.seasonalAnalysis || {}),
+    datasets: [
+      {
+        data: Object.values(vehicleTripAnalytics?.seasonalAnalysis || {}),
+        backgroundColor: [
+          'rgba(34, 197, 94, 0.8)',  // Spring
+          'rgba(251, 146, 60, 0.8)',  // Summer
+          'rgba(245, 158, 11, 0.8)',  // Fall
+          'rgba(59, 130, 246, 0.8)'   // Winter
+        ],
+        borderColor: [
+          'rgba(34, 197, 94, 1)',
+          'rgba(251, 146, 60, 1)',
+          'rgba(245, 158, 11, 1)',
+          'rgba(59, 130, 246, 1)'
+        ],
+        borderWidth: 1,
+      }
+    ]
+  };
+
   if (loading && !analyticsData) {
     return (
       <div className="analytics-loading">
@@ -334,6 +523,12 @@ const Analytics = () => {
           onClick={() => setActiveTab('fuel')}
         >
           Fuel Analysis
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'trips' ? 'active' : ''}`}
+          onClick={() => setActiveTab('trips')}
+        >
+          Trips
         </button>
       </div>
 
@@ -645,6 +840,214 @@ const Analytics = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'trips' && (
+          <div className="trips-tab">
+            {/* Trip Summary Cards */}
+            <div className="summary-cards">
+              <div className="summary-card">
+                <h3>Total Trips</h3>
+                <p className="amount">{tripAnalyticsData?.summary?.totalTrips || 0}</p>
+                <span className="period">Selected period</span>
+              </div>
+              <div className="summary-card">
+                <h3>Total Distance</h3>
+                <p className="amount">{(tripAnalyticsData?.summary?.totalDistance / 1000).toFixed(1)}k km</p>
+                <span className="period">All vehicles</span>
+              </div>
+              <div className="summary-card">
+                <h3>Total Trip Cost</h3>
+                <p className="amount">₹{tripAnalyticsData?.summary?.totalCost?.toFixed(2) || 0}</p>
+                <span className="period">All trips</span>
+              </div>
+              <div className="summary-card">
+                <h3>Avg Distance per Trip</h3>
+                <p className="amount">{tripAnalyticsData?.summary?.avgDistancePerTrip || 0} km</p>
+                <span className="period">Per trip</span>
+              </div>
+            </div>
+
+            {/* Trip Charts */}
+            <div className="charts-grid">
+              <div className="chart-container large">
+                <h3>Monthly Trip Trends</h3>
+                <Bar data={monthlyTripsChart} options={{ responsive: true, maintainAspectRatio: false }} />
+              </div>
+
+              <div className="chart-container">
+                <h3>Trip Purpose Distribution</h3>
+                <Pie data={tripPurposeChart} options={{ responsive: true, maintainAspectRatio: false }} />
+              </div>
+
+              <div className="chart-container">
+                <h3>Vehicle Trip Comparison</h3>
+                <Bar data={vehicleTripComparisonChart} options={{ responsive: true, maintainAspectRatio: false }} />
+              </div>
+            </div>
+
+            {/* Vehicle Trip Analysis */}
+            {vehicleTripAnalytics && (
+              <div className="vehicle-trip-section">
+                <h3>Trip Analysis for {vehicleTripAnalytics.vehicle.name}</h3>
+
+                <div className="summary-cards">
+                  <div className="summary-card">
+                    <h3>Total Trips</h3>
+                    <p className="amount">{vehicleTripAnalytics.summary.totalTrips}</p>
+                    <span className="period">Selected period</span>
+                  </div>
+                  <div className="summary-card">
+                    <h3>Total Distance</h3>
+                    <p className="amount">{(vehicleTripAnalytics.summary.totalDistance / 1000).toFixed(1)}k km</p>
+                    <span className="period">Selected period</span>
+                  </div>
+                  <div className="summary-card">
+                    <h3>Avg Distance</h3>
+                    <p className="amount">{vehicleTripAnalytics.summary.avgDistancePerTrip} km</p>
+                    <span className="period">Per trip</span>
+                  </div>
+                  <div className="summary-card">
+                    <h3>Longest Trip</h3>
+                    <p className="amount">{vehicleTripAnalytics.summary.longestTrip} km</p>
+                    <span className="period">Max distance</span>
+                  </div>
+                </div>
+
+                <div className="charts-grid">
+                  <div className="chart-container large">
+                    <h3>Monthly Trip Distance</h3>
+                    <Bar data={vehicleTripDistanceChart} options={{ responsive: true, maintainAspectRatio: false }} />
+                  </div>
+
+                  <div className="chart-container">
+                    <h3>Trip Purpose Breakdown</h3>
+                    <Doughnut data={vehicleTripPurposeChart} options={{ responsive: true, maintainAspectRatio: false }} />
+                  </div>
+
+                  <div className="chart-container">
+                    <h3>Seasonal Trip Distribution</h3>
+                    <Pie data={seasonalTripChart} options={{ responsive: true, maintainAspectRatio: false }} />
+                  </div>
+                </div>
+
+                {/* Recent Trips Table */}
+                <div className="data-table">
+                  <h3>Recent Trips</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Route</th>
+                        <th>Distance</th>
+                        <th>Cost</th>
+                        <th>Purpose</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {vehicleTripAnalytics.recentTrips?.map(trip => (
+                        <tr key={trip.id}>
+                          <td>{new Date(trip.date).toLocaleDateString()}</td>
+                          <td>{trip.startLocation} → {trip.endLocation}</td>
+                          <td>{trip.distance} km</td>
+                          <td>₹{trip.cost?.toFixed(2)}</td>
+                          <td>{trip.purpose}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Comparative Trip Analysis */}
+            {comparativeTripData && (
+              <div className="comparative-trip-section">
+                <h3>Vehicle Trip Comparison</h3>
+
+                <div className="summary-cards">
+                  <div className="summary-card">
+                    <h3>Most Active Vehicle</h3>
+                    <p className="amount">{comparativeTripData.summary.mostActive?.vehicle.name || 'N/A'}</p>
+                    <span className="period">{comparativeTripData.summary.mostActive?.totalTrips || 0} trips</span>
+                  </div>
+                  <div className="summary-card">
+                    <h3>Most Traveled Vehicle</h3>
+                    <p className="amount">{comparativeTripData.summary.mostTraveled?.vehicle.name || 'N/A'}</p>
+                    <span className="period">{(comparativeTripData.summary.mostTraveled?.totalDistance / 1000).toFixed(1)}k km</span>
+                  </div>
+                  <div className="summary-card">
+                    <h3>Most Expensive Trips</h3>
+                    <p className="amount">{comparativeTripData.summary.mostExpensiveTrips?.vehicle.name || 'N/A'}</p>
+                    <span className="period">₹{comparativeTripData.summary.mostExpensiveTrips?.totalCost?.toFixed(2)}</span>
+                  </div>
+                </div>
+
+                <div className="data-table">
+                  <h3>Vehicle Trip Performance</h3>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Vehicle</th>
+                        <th>Total Trips</th>
+                        <th>Total Distance</th>
+                        <th>Total Cost</th>
+                        <th>Avg Distance</th>
+                        <th>Avg Cost</th>
+                        <th>Cost per km</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {comparativeTripData.vehicles?.map(vehicle => (
+                        <tr key={vehicle.vehicle.id}>
+                          <td>{vehicle.vehicle.name}</td>
+                          <td>{vehicle.totalTrips}</td>
+                          <td>{(vehicle.totalDistance / 1000).toFixed(1)}k km</td>
+                          <td>₹{vehicle.totalCost?.toFixed(2)}</td>
+                          <td>{vehicle.avgDistance?.toFixed(1)} km</td>
+                          <td>₹{vehicle.avgCost?.toFixed(2)}</td>
+                          <td>₹{vehicle.costPerKm?.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Trip Purpose Analysis */}
+            {tripAnalyticsData?.purposeBreakdown && (
+              <div className="purpose-analysis">
+                <h3>Trip Purpose Analysis</h3>
+                <div className="data-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Purpose</th>
+                        <th>Number of Trips</th>
+                        <th>Total Distance</th>
+                        <th>Total Cost</th>
+                        <th>Avg Distance</th>
+                        <th>Avg Cost</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(tripAnalyticsData.purposeBreakdown).map(([purpose, data]) => (
+                        <tr key={purpose}>
+                          <td>{purpose}</td>
+                          <td>{data.tripCount}</td>
+                          <td>{(data.totalDistance / 1000).toFixed(1)}k km</td>
+                          <td>₹{data.totalCost?.toFixed(2)}</td>
+                          <td>{data.avgDistance?.toFixed(1)} km</td>
+                          <td>₹{data.avgCost?.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

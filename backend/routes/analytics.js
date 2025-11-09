@@ -15,4 +15,9 @@ router.get('/comparative', auth, analyticsController.getComparativeAnalytics);
 // Get fuel price trends
 router.get('/fuel-prices', auth, analyticsController.getFuelPriceTrends);
 
+// Trip analytics routes
+router.get('/trips', auth, analyticsController.getTripAnalytics);
+router.get('/trips/vehicle/:vehicleId', auth, analyticsController.getVehicleTripAnalytics);
+router.get('/trips/comparative', auth, analyticsController.getComparativeTripAnalytics);
+
 module.exports = router;
