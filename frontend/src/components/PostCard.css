@@ -79,6 +79,7 @@
 }
 
 .report-btn,
+.edit-btn,
 .delete-btn {
   background: none;
   border: none;
@@ -91,6 +92,10 @@
 
 .report-btn:hover {
   background: #fef3c7;
+}
+
+.edit-btn:hover {
+  background: #dbeafe;
 }
 
 .delete-btn:hover {

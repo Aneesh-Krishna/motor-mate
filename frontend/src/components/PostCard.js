@@ -179,6 +179,46 @@ const PostCard = ({ post, onPostUpdated, onPostDeleted, currentUser }) => {
     }
   };
 
+  const handleUpdate = async () => {
+    const actionKey = 'update';
+    setActionLoading(prev => ({ ...prev, [actionKey]: true }));
+    setError(null);
+
+    try {
+      const token = localStorage.getItem('token');
+
+      const updateData = {
+        title: post.title,
+        content: post.content,
+        tags: post.tags,
+        linkedTrip: post.linkedTrip,
+        images: post.images
+      };
+
+      const response = await fetch(`http://localhost:5000/api/posts/${post._id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update post');
+      }
+
+      const updatedPost = await response.json();
+      onPostUpdated(updatedPost);
+      setShowEditForm(false);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setActionLoading(prev => ({ ...prev, [actionKey]: false }));
+    }
+  };
+
   const isAuthor = currentUser && post.author && post.author._id === currentUser.id;
 
   return (
@@ -214,14 +254,23 @@ const PostCard = ({ post, onPostUpdated, onPostDeleted, currentUser }) => {
             ⚠️
           </button>
           {isAuthor && (
-            <button
-              onClick={handleDelete}
-              className="delete-btn"
-              title="Delete post"
-              disabled={actionLoading.delete}
-            >
-              🗑️
-            </button>
+            <>
+              <button
+                onClick={() => setShowEditForm(true)}
+                className="edit-btn"
+                title="Edit post"
+              >
+                ✏️
+              </button>
+              <button
+                onClick={handleDelete}
+                className="delete-btn"
+                title="Delete post"
+                disabled={actionLoading.delete}
+              >
+                🗑️
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -324,6 +373,99 @@ const PostCard = ({ post, onPostUpdated, onPostDeleted, currentUser }) => {
                 disabled={actionLoading.report}
               >
                 {actionLoading.report ? 'Reporting...' : 'Submit Report'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Form Modal */}
+      {showEditForm && (
+        <div className="modal-overlay">
+          <div className="modal">
+            <h3>Edit Post</h3>
+            <div className="form-group">
+              <label>Title *</label>
+              <input
+                type="text"
+                value={post.title}
+                onChange={(e) => {
+                  const updatedPost = { ...post, title: e.target.value };
+                  onPostUpdated(updatedPost);
+                }}
+                maxLength="200"
+                placeholder="Give your post a catchy title..."
+              />
+            </div>
+            <div className="form-group">
+              <label>Content *</label>
+              <textarea
+                value={post.content}
+                onChange={(e) => {
+                  const updatedPost = { ...post, content: e.target.value };
+                  onPostUpdated(updatedPost);
+                }}
+                maxLength="5000"
+                rows="8"
+                placeholder="Share your travel story, tips, or experiences..."
+              />
+              <div className="character-count">
+                {post.content.length}/5000 characters
+              </div>
+            </div>
+            <div className="form-group">
+              <label>Tags</label>
+              <input
+                type="text"
+                value={post.tags?.join(', ') || ''}
+                onChange={(e) => {
+                  const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag);
+                  const updatedPost = { ...post, tags };
+                  onPostUpdated(updatedPost);
+                }}
+                placeholder="travel, adventure, road-trip, tips (comma separated)"
+              />
+              <small>Separate tags with commas</small>
+            </div>
+            <div className="form-group">
+              <label>Linked Trip ID (Optional)</label>
+              <input
+                type="text"
+                value={post.linkedTrip || ''}
+                onChange={(e) => {
+                  const updatedPost = { ...post, linkedTrip: e.target.value };
+                  onPostUpdated(updatedPost);
+                }}
+                placeholder="Trip ID if this post is related to a specific trip"
+              />
+            </div>
+            <div className="form-group">
+              <label>Image URLs (Optional)</label>
+              <textarea
+                value={post.images?.join('\n') || ''}
+                onChange={(e) => {
+                  const images = e.target.value.split('\n').map(img => img.trim()).filter(img => img);
+                  const updatedPost = { ...post, images };
+                  onPostUpdated(updatedPost);
+                }}
+                rows="3"
+                placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg"
+              />
+              <small>Enter one URL per line</small>
+            </div>
+            <div className="modal-actions">
+              <button
+                onClick={() => setShowEditForm(false)}
+                className="cancel-btn"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdate}
+                className="submit-btn"
+                disabled={actionLoading.update || !post.title.trim() || !post.content.trim()}
+              >
+                {actionLoading.update ? 'Updating...' : 'Update Post'}
               </button>
             </div>
           </div>
