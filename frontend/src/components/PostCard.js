@@ -269,7 +269,7 @@ const PostCard = ({ post, onPostUpdated, onPostDeleted, currentUser }) => {
 
           <button
             onClick={handleDislike}
-            className={`dislike-btn ${post.dislikes && Array.isArray(post.likes) && post.dislikes.some(dislike => dislike.user === currentUser?.id) ? 'disliked' : ''}`}
+            className={`dislike-btn ${post.dislikes && Array.isArray(post.dislikes) && post.dislikes.some(dislike => dislike.user === currentUser?.id) ? 'disliked' : ''}`}
             disabled={actionLoading.dislike}
           >
             👎 {post.dislikes?.length || 0}

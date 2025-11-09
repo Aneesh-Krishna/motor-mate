@@ -101,6 +101,90 @@ exports.getPosts = async (req, res) => {
       sortOptions = { createdAt: order === 'asc' ? 1 : -1 };
     } else if (sort === 'old') {
       sortOptions = { createdAt: order === 'desc' ? 1 : -1 };
+    } else if (sort === 'short' || sort === 'contentLength') {
+      // Sort by content length (shortest first)
+      const posts = await Post.aggregate([
+        { $match: query },
+        { $addFields: { contentLength: { $strLenCP: ['$content'] } } },
+        { $sort: { contentLength: order === 'asc' ? 1 : -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit * 1 },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'author',
+            foreignField: '_id',
+            as: 'author',
+            pipeline: [
+              { $project: { username: 1, email: 1, firstName: 1, lastName: 1, avatar: 1 } }
+            ]
+          }
+        },
+        { $unwind: '$author' },
+        {
+          $lookup: {
+            from: 'trips',
+            localField: 'linkedTrip',
+            foreignField: '_id',
+            as: 'linkedTrip',
+            pipeline: [
+              { $project: { title: 1, destination: 1, startDate: 1 } }
+            ]
+          }
+        },
+        { $unwind: { path: '$linkedTrip', preserveNullAndEmptyArrays: true } }
+      ]);
+
+      const total = await Post.countDocuments(query);
+
+      return res.json({
+        posts,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+        total
+      });
+    } else if (sort === 'long') {
+      // Sort by content length (longest first)
+      const posts = await Post.aggregate([
+        { $match: query },
+        { $addFields: { contentLength: { $strLenCP: ['$content'] } } },
+        { $sort: { contentLength: order === 'desc' ? 1 : -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit * 1 },
+        {
+          $lookup: {
+            from: 'users',
+            localField: 'author',
+            foreignField: '_id',
+            as: 'author',
+            pipeline: [
+              { $project: { username: 1, email: 1, firstName: 1, lastName: 1, avatar: 1 } }
+            ]
+          }
+        },
+        { $unwind: '$author' },
+        {
+          $lookup: {
+            from: 'trips',
+            localField: 'linkedTrip',
+            foreignField: '_id',
+            as: 'linkedTrip',
+            pipeline: [
+              { $project: { title: 1, destination: 1, startDate: 1 } }
+            ]
+          }
+        },
+        { $unwind: { path: '$linkedTrip', preserveNullAndEmptyArrays: true } }
+      ]);
+
+      const total = await Post.countDocuments(query);
+
+      return res.json({
+        posts,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+        total
+      });
     } else if (sort === 'likes') {
       // Sort by likes count using aggregation
       sortOptions = { likesCount: order === 'desc' ? -1 : 1 };
@@ -229,7 +313,7 @@ exports.likePost = async (req, res) => {
     post.likes.push({ user: req.user.id });
     await post.save();
 
-    res.json({ message: 'Post liked successfully', likes: post.likes.length, dislikes: post.dislikes.length });
+    res.json({ message: 'Post liked successfully', likes: post.likes, dislikes: post.dislikes });
   } catch (error) {
     console.error('Error liking post:', error);
     res.status(500).json({ message: 'Server error while liking post' });
@@ -259,7 +343,7 @@ exports.dislikePost = async (req, res) => {
     post.dislikes.push({ user: req.user.id });
     await post.save();
 
-    res.json({ message: 'Post disliked successfully', likes: post.likes.length, dislikes: post.dislikes.length });
+    res.json({ message: 'Post disliked successfully', likes: post.likes, dislikes: post.dislikes });
   } catch (error) {
     console.error('Error disliking post:', error);
     res.status(500).json({ message: 'Server error while disliking post' });
