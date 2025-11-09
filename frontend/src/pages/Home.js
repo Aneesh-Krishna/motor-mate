@@ -20,8 +20,7 @@ const Home = () => {
     <div className="home">
       <div className="hero">
         <div className="hero-content">
-          <h1>🚗 MotorMate</h1>
-          <h2>Your Complete Vehicle Management Solution</h2>
+          <h1>Your Complete Vehicle Management Solution</h1>
           <p>Track expenses, monitor service history, and manage important dates - all in one easy-to-use platform designed for motorists.</p>
 
           <div className="hero-buttons">
